@@ -1,41 +1,62 @@
 cmake_minimum_required(VERSION 3.16)
-
 project(Hogrin VERSION 0.1 LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
 
-qt_standard_project_setup(REQUIRES 6.8)
+# 1. СНАЧАЛА ИЩЕМ QT
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network)
 
+# 2. ТЕПЕРЬ МОЖНО СТАВИТЬ ПОЛИТИКУ
+qt_policy(SET QTP0004 NEW)
+
+# 3. Создаем исполняемый файл приложения
 qt_add_executable(appHogrin
-    main.cpp
+    # App entry point
+    src/app/main.cpp
+
+    # Network Layer
+    src/network/include/network_manager.h
+    src/network/src/network_manager.cpp
+
+    # Core Logic
+    src/core/include/messenger_core.h
+    src/core/src/messenger_core.cpp
+
+    # UI Backend
+    src/ui/backend/ui_handler.h
+    src/ui/backend/ui_handler.cpp
+
+    # Common
+    src/common/types.h
 )
 
+# 4. Настраиваем QML модуль
 qt_add_qml_module(appHogrin
     URI Hogrin
+    VERSION 1.0
+    RESOURCE_PREFIX /qt/qml
     QML_FILES
-        Main.qml
+        src/ui/qml/Main.qml
 )
 
-# Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
-# If you are developing for iOS or macOS you should consider setting an
-# explicit, fixed bundle identifier manually though.
-set_target_properties(appHogrin PROPERTIES
-#    MACOSX_BUNDLE_GUI_IDENTIFIER com.example.appHogrin
-    MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
-    MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
-    MACOSX_BUNDLE TRUE
-    WIN32_EXECUTABLE TRUE
+# 5. Подключаем библиотеки
+target_link_libraries(appHogrin PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Qml
+    Qt6::Quick
+    Qt6::Network
 )
 
-target_link_libraries(appHogrin
-    PRIVATE Qt6::Quick
-)
-
-include(GNUInstallDirs)
-install(TARGETS appHogrin
-    BUNDLE DESTINATION .
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+# 6. Инклуды
+target_include_directories(appHogrin PRIVATE
+    src/app
+    src/core/include
+    src/network/include
+    src/common
 )
