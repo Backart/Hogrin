@@ -1,9 +1,11 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QTimer>
-#include "../network/include/network_manager.h"
+#include "../core/include/messenger_core.h"
+
 
 using namespace Qt::StringLiterals;
+
 
 int main(int argc, char *argv[])
 {
@@ -20,14 +22,23 @@ int main(int argc, char *argv[])
 
     engine.load(url);
 
-    // Создаем менеджер
-    Network_Manager net;
-    net.connect_to_host("127.0.0.1", 1234);
+    // --- НАЧАЛО ТЕСТА СЕТИ ---
 
-    // Таймер: через 3 секунды отправит привет в сокет
-    QTimer::singleShot(3000, &net, [&](){
-        net.send_data("Hello\n");
+    Messenger_Core core;
+
+    core.start_server(1234);
+
+    // 2. Теперь стучимся сами к себе (Клиент)
+    // Подключаемся к локалхосту на тот же порт, который только что открыли
+    core.connect_to_host("127.0.0.1", 1234);
+
+    // 3. Таймер: даем время на рукопожатие (3 секунды) и отправляем данные
+    QTimer::singleShot(3000, &core, [&](){
+        qDebug() << "TEST: Sending data...";
+        core.send_message("Hello from qt main.cpp!\n");
     });
+
+    // --- КОНЕЦ ТЕСТА СЕТИ ---
 
     return app.exec();
 }
