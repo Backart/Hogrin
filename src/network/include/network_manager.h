@@ -4,8 +4,9 @@
 #include <QObject>
 #include <QTcpSocket>
 #include <QAbstractSocket>
-
-#include <QTextStream>
+#include <QString>
+#include <QTcpServer>
+#include <QList>
 
 /**
  * @brief Класс для управления низкоуровневыми сетевыми соединениями.
@@ -21,6 +22,8 @@ public:
     void connect_to_host(const QString &host, quint16 port);
     void disconnect_from_host();
     void send_data(const QByteArray &data);
+    bool start_server(quint16 port);
+
 signals:
     // signals to inform Messenger_Core
     void connected();
@@ -31,12 +34,15 @@ signals:
 private slots:
     // iternal socket event handling
     void on_ready_read();
-    void on_connectig();
+    void on_connected();
     void on_disconnectig();
     void on_error_occurred(QAbstractSocket::SocketError socketError);
 
+    void on_new_connection();
 private:
     QTcpSocket *m_socket;
+    QList<QTcpSocket*> m_sockets;
+    QTcpServer *m_server;
 };
 
 #endif
