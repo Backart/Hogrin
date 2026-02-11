@@ -25,11 +25,11 @@ public:
 
     void send_message(const QString &text);
     bool start_server(quint16 port);
-
     void connect_to_host(const QString &host, quint16 port);
 
-
 signals:
+
+    void message_received(const QString &text);
 
 private slots:
 
