@@ -66,7 +66,7 @@ void Messenger_Core::setup_handlers(){
                  << packet.timestamp.toString("hh:mm:ss")
                  << ":" << message;
 
-        // call singnal to UI
+        emit message_received(message);
     };
     // add new type
 }
