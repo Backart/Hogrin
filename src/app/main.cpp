@@ -22,22 +22,13 @@ int main(int argc, char *argv[])
                              QCoreApplication::exit(-1);
                      }, Qt::QueuedConnection);
 
-    // --- НАЧАЛО ТЕСТА СЕТИ ---
 
     Messenger_Core core;
     UI_Handler ui_backend(&core);
 
-    core.start_server(1234);
-
-    // 2. Теперь стучимся сами к себе (Клиент)
-    // Подключаемся к локалхосту на тот же порт, который только что открыли
-    core.connect_to_host("127.0.0.1", 1234);
-
-
-    // Внедряем С++ объект в QML под именем "backend"
     engine.rootContext()->setContextProperty("backend", &ui_backend);
 
-    // --- КОНЕЦ ТЕСТА СЕТИ ---
+
 
     engine.load(url);
 

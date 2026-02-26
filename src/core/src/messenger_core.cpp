@@ -3,15 +3,13 @@
 #include <QDebug>
 
 Messenger_Core::Messenger_Core(QObject *parent)
-    : QObject(parent) // Передаем родителя в базовый класс Qt
-    , m_network(new Network_Manager(this)) // Создаем сокет и привязываем его память к этому классу
+    : QObject(parent)
+    , m_network(new Network_Manager(this))
 {
     setup_handlers();
-
-    // Здесь "прошиваем" логику (Сигналы и Слоты)
     // connect(от_кого, &От_Кого::сигнал, кому, &Кому::слот);
 
-    connect(m_network, &Network_Manager::data_received, this, &Messenger_Core::on_data_received);
+    connect(m_network, &Network_Manager::data_received, this, &Messenger_Core::handle_data_received);
 }
 
 QByteArray Messenger_Core::serialize_packet(const DataPacket &packet){
@@ -40,10 +38,16 @@ DataPacket Messenger_Core::deserialize_packet(const QByteArray &bytes){
     stream >> packet.timestamp;
     stream >> packet.data;
 
+    if (stream.status() != QDataStream::Ok) {
+        qDebug() << "Error: Failed to deserialize packet!";
+    } else {
+        packet.type = static_cast<MessageType>(type_value);
+    }
+
     return packet;
 }
 
-void Messenger_Core::on_data_received(const QByteArray &data){
+void Messenger_Core::handle_data_received(const QByteArray &data){
 
     if(data.isEmpty()) return;
 
@@ -61,30 +65,49 @@ void Messenger_Core::on_data_received(const QByteArray &data){
 
 void Messenger_Core::setup_handlers(){
     m_handlers[MessageType::ChatMessage] = [this](const DataPacket &packet){
-        QString message = QString::fromUtf8(packet.data);
-        qDebug() << "New message received at"
-                 << packet.timestamp.toString("hh:mm:ss")
-                 << ":" << message;
 
-        emit message_received(message);
+        QDataStream stream(packet.data);
+
+        QString senderName;
+        QString messageText;
+
+        stream >> senderName >> messageText;
+
+        if(stream.status() != QDataStream::Ok){
+            qDebug() << "Error reading chat message stream";
+            return;
+        }
+
+        qDebug() << "New message from" << senderName
+                 << ":"<< messageText
+                 << packet.timestamp.toString("hh:mm:ss");
+
+
+        emit message_received(senderName, messageText);
     };
     // add new type
 }
 
-void Messenger_Core::send_message(const QString &text){
+void Messenger_Core::send_message(const QString &username, const QString &text){
 
     if(text.isEmpty()) return;
+
+    QByteArray payload;
+    QDataStream stream(&payload, QIODevice::WriteOnly);
+
+    stream << username << text;
 
     DataPacket packet;
     packet.type = MessageType::ChatMessage;
     packet.timestamp = QDateTime::currentDateTime();
-    packet.data = text.toUtf8();
+    packet.data = payload;
 
     QByteArray bytes = serialize_packet(packet);
 
     if(m_network)
         m_network->send_data(bytes);
 
+    emit message_received(username, text);
 }
 
 bool Messenger_Core::start_server(quint16 port){

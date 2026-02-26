@@ -5,12 +5,10 @@
 #include <QByteArray>
 #include <QDateTime>
 
-/**
- * @brief Типы сообщений нашего протокола.
- * Каждое сообщение в сети будет начинаться с этого числа.
- */
 enum class MessageType : quint8{
     Registration = 1,
+    SystemNotification,
+    Handshake,
     PeerListRequest,
     ChatMessage,
     SystemPing,
@@ -25,9 +23,7 @@ enum class MessageStatus : quint8 {
     Error
 };
 
-/**
- * @brief Структура данных для одного пира (пользователя)
- */
+
 struct PeerInfo{
     QString username;
     QString ip_address;
