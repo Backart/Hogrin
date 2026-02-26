@@ -23,6 +23,9 @@ qt_add_executable(appHogrin
     src/network/include/network_manager.h
     src/network/src/network_manager.cpp
 
+    src/network/include/tcp_connection.h
+    src/network/src/tcp_connection.cpp
+
     # Core Logic
     src/core/include/messenger_core.h
     src/core/src/messenger_core.cpp
@@ -42,6 +45,17 @@ qt_add_qml_module(appHogrin
     RESOURCE_PREFIX /qt/qml
     QML_FILES
         src/ui/qml/Main.qml
+        SOURCES
+        QML_FILES src/ui/qml/components/Style.qml
+        QML_FILES src/ui/qml/components/MessageDelegate.qml
+        QML_FILES src/ui/qml/components/ChatList.qml
+        QML_FILES src/ui/qml/components/ChatArea.qml
+        QML_FILES src/ui/qml/components/AvatarCircle.qml
+        QML_FILES src/ui/qml/components/SectionLabel.qml
+        QML_FILES src/ui/qml/components/SettingsCard.qml
+        QML_FILES src/ui/qml/components/ModernField.qml
+        QML_FILES src/ui/qml/components/AccentButton.qml
+        QML_FILES src/ui/qml/components/ModernSwitch.qml
 )
 
 # 5. Подключаем библиотеки
