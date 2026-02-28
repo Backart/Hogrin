@@ -291,13 +291,12 @@ Rectangle {
             return
         }
 
-        // Хешируем пароль через бэкенд
         let success = false
         if (isLoginMode) {
-            success = backend.loginUser(nick, pass)
+            success = backend.login_user(nick, pass)
             if (!success) authRoot.errorText = "Invalid nickname or password"
         } else {
-            success = backend.registerUser(nick, pass)
+            success = backend.register_user(nick, pass)
             if (!success) authRoot.errorText = "Nickname already taken"
         }
 

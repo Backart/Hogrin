@@ -11,7 +11,7 @@
 
 #include "../network/include/network_manager.h"
 #include "../common/types.h"
-#include "../include/db_manager.h"
+#include "db_manager.h"
 
 
 class Messenger_Core: public QObject{
@@ -25,12 +25,17 @@ public:
     bool start_server(quint16 port);
     void connect_to_host(const QString &host, quint16 port);
 
-    bool connectToDatabase(const QString &host, int port,
+    bool connect_to_database(const QString &host, int port,
                            const QString &dbName,
                            const QString &user,
                            const QString &password);
-    bool registerUser(const QString &nickname, const QString &passwordHash);
-    bool loginUser(const QString &nickname, const QString &passwordHash);
+    bool register_user(const QString &nickname, const QString &passwordHash);
+    bool login_user(const QString &nickname, const QString &passwordHash);
+
+    void create_session(const QString &nickname, const QString &token);
+    bool session_exists(const QString &token);
+    void remove_session(const QString &token);
+    void update_last_seen(const QString &nickname);
 
 signals:
 

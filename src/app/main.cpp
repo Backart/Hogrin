@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
     Messenger_Core core;
     UI_Handler ui_backend(&core);
 
-    ui_backend.connectToDatabase(
+    ui_backend.connect_to_database(
         Config::DB_HOST,
         Config::DB_PORT,
         Config::DB_NAME,
