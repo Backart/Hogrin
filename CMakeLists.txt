@@ -8,13 +8,11 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# 1. СНАЧАЛА ИЩЕМ QT
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network)
 
-# 2. ТЕПЕРЬ МОЖНО СТАВИТЬ ПОЛИТИКУ
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network Sql)
+
 qt_policy(SET QTP0004 NEW)
 
-# 3. Создаем исполняемый файл приложения
 qt_add_executable(appHogrin
     # App entry point
     src/app/main.cpp
@@ -36,9 +34,13 @@ qt_add_executable(appHogrin
 
     # Common
     src/common/types.h
+    src/common/config.h
+
+    # DB
+    src/db/include/db_manager.h
+    src/db/src/db_manager.cpp
 )
 
-# 4. Настраиваем QML модуль
 qt_add_qml_module(appHogrin
     URI Hogrin
     VERSION 1.0
@@ -56,21 +58,23 @@ qt_add_qml_module(appHogrin
         QML_FILES src/ui/qml/components/ModernField.qml
         QML_FILES src/ui/qml/components/AccentButton.qml
         QML_FILES src/ui/qml/components/ModernSwitch.qml
+        QML_FILES src/ui/qml/components/AuthScreen.qml
 )
 
-# 5. Подключаем библиотеки
+
 target_link_libraries(appHogrin PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick
     Qt6::Network
+    Qt6::Sql
 )
 
-# 6. Инклуды
 target_include_directories(appHogrin PRIVATE
     src/app
     src/core/include
     src/network/include
     src/common
+    src/db/include
 )

@@ -193,7 +193,8 @@ Rectangle {
                             id: myUsernameField
                             width: parent.width
                             placeholderText: "Username"
-                            text: "Monk"
+                            text: root.loggedInUser
+                            readOnly: true
                         }
                     }
 
