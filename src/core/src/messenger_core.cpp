@@ -5,6 +5,7 @@
 Messenger_Core::Messenger_Core(QObject *parent)
     : QObject(parent)
     , m_network(new Network_Manager(this))
+    , m_db(new DB_Manager(this))
 {
     setup_handlers();
     // connect(от_кого, &От_Кого::сигнал, кому, &Кому::слот);
@@ -116,6 +117,27 @@ bool Messenger_Core::start_server(quint16 port){
 
 void Messenger_Core::connect_to_host(const QString &host, quint16 port){
     m_network->connect_to_host(host, port);
+}
+
+bool Messenger_Core::connectToDatabase(const QString &host, int port,
+                                       const QString &dbName,
+                                       const QString &user,
+                                       const QString &password)
+{
+    return m_db->connect(host, port, dbName, user, password);
+}
+
+bool Messenger_Core::registerUser(const QString &nickname, const QString &passwordHash)
+{
+    return m_db->registerUser(nickname, passwordHash);
+}
+
+bool Messenger_Core::loginUser(const QString &nickname, const QString &passwordHash)
+{
+    if (!m_db->validateUser(nickname, passwordHash))
+        return false;
+    m_db->updateLastSeen(nickname);
+    return true;
 }
 
 
