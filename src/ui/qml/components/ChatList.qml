@@ -242,6 +242,22 @@ Rectangle {
                     }
 
                     Item { height: 20 }
+
+                    SectionLabel { label: "Account" }
+                    Item { height: 8 }
+
+                    AccentButton {
+                        Layout.fillWidth: true
+                        text: "Sign Out"
+                        flat_style: true
+                        onClicked: {
+                            backend.logout()
+                            root.isAuthenticated = false
+                            root.loggedInUser = ""
+                        }
+                    }
+
+                    Item { height: 20 }
                 }
             }
         }

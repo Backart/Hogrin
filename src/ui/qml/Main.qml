@@ -22,6 +22,17 @@ Window {
 
     Style { id: theme }
     ListModel { id: chatModel }
+    Connections {
+        target: backend
+        function onSession_restored(nickname) {
+            root.loggedInUser = nickname
+            root.isAuthenticated = true
+        }
+    }
+
+    Component.onCompleted: {
+        backend.check_saved_session()
+    }
 
     Connections {
         target: backend

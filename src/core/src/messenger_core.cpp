@@ -119,7 +119,7 @@ void Messenger_Core::connect_to_host(const QString &host, quint16 port){
     m_network->connect_to_host(host, port);
 }
 
-bool Messenger_Core::connectToDatabase(const QString &host, int port,
+bool Messenger_Core::connect_to_database(const QString &host, int port,
                                        const QString &dbName,
                                        const QString &user,
                                        const QString &password)
@@ -127,12 +127,12 @@ bool Messenger_Core::connectToDatabase(const QString &host, int port,
     return m_db->connect(host, port, dbName, user, password);
 }
 
-bool Messenger_Core::registerUser(const QString &nickname, const QString &passwordHash)
+bool Messenger_Core::register_user(const QString &nickname, const QString &passwordHash)
 {
     return m_db->registerUser(nickname, passwordHash);
 }
 
-bool Messenger_Core::loginUser(const QString &nickname, const QString &passwordHash)
+bool Messenger_Core::login_user(const QString &nickname, const QString &passwordHash)
 {
     if (!m_db->validateUser(nickname, passwordHash))
         return false;
@@ -140,4 +140,22 @@ bool Messenger_Core::loginUser(const QString &nickname, const QString &passwordH
     return true;
 }
 
+void Messenger_Core::create_session(const QString &nickname, const QString &token)
+{
+    m_db->createSession(nickname, "0.0.0.0", token);
+}
 
+bool Messenger_Core::session_exists(const QString &token)
+{
+    return m_db->sessionExists(token);
+}
+
+void Messenger_Core::remove_session(const QString &token)
+{
+    m_db->removeSession(token);
+}
+
+void Messenger_Core::update_last_seen(const QString &nickname)
+{
+    m_db->updateLastSeen(nickname);
+}
