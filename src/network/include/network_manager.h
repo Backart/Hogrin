@@ -5,6 +5,7 @@
 #include <QTcpServer>
 #include <QList>
 #include "tcp_connection.h"
+#include "../common/config.h"
 
 
 class Network_Manager : public QObject {
@@ -37,6 +38,9 @@ private:
 
     // Список активных соеденений
     QList<Tcp_Connection*> m_connections;
+
+    bool m_handshake_done = false;
+    void handle_handshake(Tcp_Connection *connection, const QByteArray &data);
 };
 
 #endif

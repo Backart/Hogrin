@@ -22,34 +22,48 @@ bool Network_Manager::start_server(quint16 port){
 
 void Network_Manager::connect_to_host(const QString &host, quint16 port){
     qDebug() << "Connecting to" << host << ":" << port;
-
-
     QTcpSocket *socket = new QTcpSocket();
-    socket->connectToHost(host, port);
+
     Tcp_Connection *connection = new Tcp_Connection(socket, this);
 
-    connect(connection, &Tcp_Connection::dataReceived, this, &Network_Manager::handle_data_received);
+    connect(socket, &QTcpSocket::connected, this, [connection](){
+        connection->sendMessage(QByteArray(Config::HANDSHAKE_TOKEN));
+    });
 
+    socket->connectToHost(host, port);
+    connect(connection, &Tcp_Connection::dataReceived, this, &Network_Manager::handle_data_received);
     connect(connection, &Tcp_Connection::disconnected, this, [this, connection](){
         m_connections.removeAll(connection);
         connection->deleteLater();
         emit disconnected();
-        qDebug() << "Connection lost. Remaining peers:" << m_connections.size();
     });
-
-
     m_connections.append(connection);
 }
 
 void Network_Manager::handle_new_connection(){
-
     while (m_server->hasPendingConnections()) {
         QTcpSocket *socket = m_server->nextPendingConnection();
-
-
         Tcp_Connection *connection = new Tcp_Connection(socket, this);
 
-        connect(connection, &Tcp_Connection::dataReceived, this, &Network_Manager::handle_data_received);
+        // Ждём handshake токен — первые данные должны быть токеном
+        connect(connection, &Tcp_Connection::dataReceived, this, [this, connection](const QByteArray &data){
+            if (!connection->property("authenticated").toBool()) {
+                qDebug() << "Handshake received, size:" << data.size() << "data:" << data.trimmed();
+                qDebug() << "Expected token:" << QByteArray(Config::HANDSHAKE_TOKEN);
+                if (data.trimmed() == QByteArray(Config::HANDSHAKE_TOKEN)) {
+                    connection->setProperty("authenticated", true);
+                    qDebug() << "Client authenticated successfully";
+                    emit connected();
+                } else {
+                    qDebug() << "Invalid handshake token — dropping connection";
+                    connection->deleteLater();
+                    m_connections.removeAll(connection);
+                    return;
+                }
+            } else {
+                handle_data_received(data);
+            }
+        });
 
         connect(connection, &Tcp_Connection::disconnected, this, [this, connection](){
             m_connections.removeAll(connection);
@@ -57,8 +71,7 @@ void Network_Manager::handle_new_connection(){
         });
 
         m_connections.append(connection);
-        emit connected();
-        qDebug() << "New incoming connection! Total peers:" << m_connections.size();
+        qDebug() << "New incoming connection! Waiting for handshake. Total peers:" << m_connections.size();
     }
 }
 
@@ -69,6 +82,7 @@ void Network_Manager::send_data(const QByteArray &data){
 }
 
 void Network_Manager::handle_data_received(const QByteArray &data){
+    qDebug() << "handle_data_received called, size:" << data.size();
     emit data_received(data);
 }
 
