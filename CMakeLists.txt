@@ -24,6 +24,9 @@ qt_add_executable(appHogrin
     src/network/include/tcp_connection.h
     src/network/src/tcp_connection.cpp
 
+    src/network/include/bootstrap_client.h
+    src/network/src/bootstrap_client.cpp
+
     # Core Logic
     src/core/include/messenger_core.h
     src/core/src/messenger_core.cpp

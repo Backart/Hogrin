@@ -12,6 +12,7 @@
 #include "../network/include/network_manager.h"
 #include "../common/types.h"
 #include "db_manager.h"
+#include "bootstrap_client.h"
 
 
 class Messenger_Core: public QObject{
@@ -37,9 +38,14 @@ public:
     void remove_session(const QString &token);
     void update_last_seen(const QString &nickname);
 
+    void register_on_bootstrap(const QString &nickname);
+    void find_peer(const QString &nickname);
+
 signals:
 
     void message_received(const QString &text, const QString &username);
+    void peer_found(const QString &nickname, const QString &host, quint16 port);
+    void peer_not_found(const QString &nickname);
 
 private slots:
 
@@ -55,6 +61,8 @@ private:
     void setup_handlers();
 
     DB_Manager *m_db;
+
+    Bootstrap_Client *m_bootstrap;
 };
 
 
