@@ -36,6 +36,15 @@ Window {
 
     Connections {
         target: backend
+        function onSession_restored(nickname) {
+            root.loggedInUser = nickname
+            root.isAuthenticated = true
+            backend.register_on_bootstrap(nickname)
+        }
+    }
+
+    Connections {
+        target: backend
         function onMessage_received(username, text, time) {
             if (username === root.currentUsername) return
             chatModel.append({
@@ -57,6 +66,7 @@ Window {
         onAuthSuccess: function(username) {
             root.loggedInUser = username
             root.isAuthenticated = true
+            backend.register_on_bootstrap(username)
         }
     }
 

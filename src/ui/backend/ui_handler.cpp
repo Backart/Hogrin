@@ -81,3 +81,21 @@ void UI_Handler::logout()
     settings.remove("session/token");
     settings.remove("session/nickname");
 }
+
+void UI_Handler::register_on_bootstrap(const QString &nickname)
+{
+    m_core->register_on_bootstrap(nickname);
+}
+
+void UI_Handler::find_peer(const QString &nickname)
+{
+    connect(m_core, &Messenger_Core::peer_found,
+            this, [this](const QString &, const QString &host, quint16 port){
+                emit peer_found(host, port);
+            });
+    connect(m_core, &Messenger_Core::peer_not_found,
+            this, [this](const QString &){
+                emit peer_not_found();
+            });
+    m_core->find_peer(nickname);
+}

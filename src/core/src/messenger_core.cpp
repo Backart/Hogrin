@@ -6,11 +6,18 @@ Messenger_Core::Messenger_Core(QObject *parent)
     : QObject(parent)
     , m_network(new Network_Manager(this))
     , m_db(new DB_Manager(this))
+    , m_bootstrap(new Bootstrap_Client(this))
 {
     setup_handlers();
     // connect(от_кого, &От_Кого::сигнал, кому, &Кому::слот);
 
-    connect(m_network, &Network_Manager::data_received, this, &Messenger_Core::handle_data_received);
+    connect(m_network, &Network_Manager::data_received,
+            this, &Messenger_Core::handle_data_received);
+
+    connect(m_bootstrap, &Bootstrap_Client::user_found,
+            this, &Messenger_Core::peer_found);
+    connect(m_bootstrap, &Bootstrap_Client::user_not_found,
+            this, &Messenger_Core::peer_not_found);
 }
 
 QByteArray Messenger_Core::serialize_packet(const DataPacket &packet){
@@ -158,4 +165,14 @@ void Messenger_Core::remove_session(const QString &token)
 void Messenger_Core::update_last_seen(const QString &nickname)
 {
     m_db->updateLastSeen(nickname);
+}
+
+void Messenger_Core::register_on_bootstrap(const QString &nickname)
+{
+    m_bootstrap->register_user(nickname, Config::BOOTSTRAP_PORT);
+}
+
+void Messenger_Core::find_peer(const QString &nickname)
+{
+    m_bootstrap->find_user(nickname);
 }
