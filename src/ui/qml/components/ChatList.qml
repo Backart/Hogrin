@@ -83,60 +83,188 @@ Rectangle {
             // ── Chats tab ──
             Item {
                 clip: true
-                ListView {
+
+                ColumnLayout {
                     anchors.fill: parent
-                    model: ["Global Chat"]
-                    topMargin: 8; bottomMargin: 8
+                    spacing: 0
 
-                    delegate: ItemDelegate {
-                        width: parent.width
-                        height: 60
-                        highlighted: true
+                    // Search bar
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 52
+                        color: "transparent"
 
-                        background: Rectangle {
-                            radius: theme.radiusSmall
-                            color: theme.bgActive
+                        RowLayout {
+                            anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
+                            spacing: 8
+
                             Rectangle {
-                                anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
-                                width: 3; radius: 2
-                                color: theme.accent
-                            }
-                        }
+                                Layout.fillWidth: true
+                                height: 36
+                                radius: theme.radiusFull
+                                color: theme.bgInput
+                                border.color: searchField.activeFocus ? theme.accent : theme.border
+                                border.width: searchField.activeFocus ? 2 : 1
 
-                        contentItem: RowLayout {
-                            spacing: 10
+                                RowLayout {
+                                    anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
+                                    spacing: 6
 
-                            AvatarCircle {
-                                name: "#"
-                                fontSize: 16
-                                width: 38; height: 38
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: width / 2
-                                    color: "#2B3080"
                                     Text {
-                                        anchors.centerIn: parent
-                                        text: "#"
-                                        font.pixelSize: 16
+                                        text: "@"
+                                        font.pixelSize: 14
                                         font.weight: Font.Bold
                                         color: theme.accent
+                                    }
+
+                                    TextInput {
+                                        id: searchField
+                                        Layout.fillWidth: true
+                                        font.pixelSize: 13
+                                        color: theme.text
+                                        clip: true
+
+                                        Text {
+                                            anchors.fill: parent
+                                            text: "find by nickname..."
+                                            font: searchField.font
+                                            color: theme.textSecondary
+                                            visible: searchField.text.length === 0
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+
+                                        Keys.onReturnPressed: {
+                                            if (searchField.text.trim().length > 0) {
+                                                searchStatus.parent.searchSuccess = false
+                                                backend.find_peer(searchField.text.trim())
+                                            }
+                                        }
                                     }
                                 }
                             }
 
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 2
+                            Rectangle {
+                                width: 36; height: 36
+                                radius: width / 2
+                                color: searchArea.containsMouse ? theme.accentHover : theme.accent
+                                opacity: searchField.text.length > 0 ? 1.0 : 0.4
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
+
                                 Text {
-                                    text: modelData
-                                    font.pixelSize: 14
-                                    font.weight: Font.Medium
-                                    color: theme.text
+                                    anchors.centerIn: parent
+                                    text: "→"
+                                    font.pixelSize: 16
+                                    color: "#FFFFFF"
                                 }
-                                Text {
-                                    text: chatModel.count + " messages"
-                                    font.pixelSize: 12
-                                    color: theme.textSecondary
+
+                                MouseArea {
+                                    id: searchArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (searchField.text.trim().length > 0) {
+                                            searchStatus.parent.searchSuccess = false
+                                            backend.find_peer(searchField.text.trim())
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
+
+                    // Toast
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: searchStatus.text.length > 0 ? 32 : 0
+                        color: searchSuccess ? "#1A3A1A" : "#3A1A1A"
+                        clip: true
+
+                        property bool searchSuccess: false
+
+                        Behavior on height { NumberAnimation { duration: 200 } }
+
+                        Text {
+                            id: searchStatus
+                            anchors.centerIn: parent
+                            font.pixelSize: 12
+                            color: parent.searchSuccess ? theme.online : "#E05C5C"
+                        }
+
+                        Connections {
+                            target: backend
+                            function onPeer_found(host, port) {
+                                if (searchStatus.parent.searchSuccess) return  // guard
+                                searchStatus.parent.searchSuccess = true
+                                searchStatus.text = "Found! Connecting..."
+                                backend.connect_to_host(host, port)
+                                searchField.text = ""
+                            }
+                            function onPeer_not_found() {
+                                searchStatus.parent.searchSuccess = false
+                                searchStatus.text = "User not found"
+                            }
+                        }
+                    }
+
+                    ListView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: ["Global Chat"]
+                        topMargin: 8; bottomMargin: 8
+
+                        delegate: ItemDelegate {
+                            width: parent.width
+                            height: 60
+                            highlighted: true
+
+                            background: Rectangle {
+                                radius: theme.radiusSmall
+                                color: theme.bgActive
+                                Rectangle {
+                                    anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
+                                    width: 3; radius: 2
+                                    color: theme.accent
+                                }
+                            }
+
+                            contentItem: RowLayout {
+                                spacing: 10
+
+                                AvatarCircle {
+                                    name: "#"
+                                    fontSize: 16
+                                    width: 38; height: 38
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: width / 2
+                                        color: "#2B3080"
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "#"
+                                            font.pixelSize: 16
+                                            font.weight: Font.Bold
+                                            color: theme.accent
+                                        }
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 2
+                                    Text {
+                                        text: modelData
+                                        font.pixelSize: 14
+                                        font.weight: Font.Medium
+                                        color: theme.text
+                                    }
+                                    Text {
+                                        text: chatModel.count + " messages"
+                                        font.pixelSize: 12
+                                        color: theme.textSecondary
+                                    }
                                 }
                             }
                         }
