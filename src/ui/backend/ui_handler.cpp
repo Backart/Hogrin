@@ -10,6 +10,17 @@ UI_Handler::UI_Handler(Messenger_Core *core,QObject *parent)
             [this](const QString &username, const QString &text){
             emit message_received(username, text, QDateTime::currentDateTime());
             });
+
+
+    connect(m_core, &Messenger_Core::peer_found,
+            this, [this](const QString &, const QString &host, quint16 port){
+                emit peer_found(host, port);
+            });
+
+    connect(m_core, &Messenger_Core::peer_not_found,
+            this, [this](const QString &){
+                emit peer_not_found();
+            });
 }
 
 void UI_Handler::send_message_from_ui(const QString &username, const QString &text){
@@ -89,13 +100,5 @@ void UI_Handler::register_on_bootstrap(const QString &nickname)
 
 void UI_Handler::find_peer(const QString &nickname)
 {
-    connect(m_core, &Messenger_Core::peer_found,
-            this, [this](const QString &, const QString &host, quint16 port){
-                emit peer_found(host, port);
-            });
-    connect(m_core, &Messenger_Core::peer_not_found,
-            this, [this](const QString &){
-                emit peer_not_found();
-            });
     m_core->find_peer(nickname);
 }

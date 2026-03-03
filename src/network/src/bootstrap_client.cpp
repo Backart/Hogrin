@@ -11,10 +11,12 @@ Bootstrap_Client::Bootstrap_Client(QObject *parent)
         qDebug() << "Bootstrap response:" << response;
 
         if (response.startsWith("FOUND:")) {
-            QStringList parts = response.mid(6).split(":");
-            if (parts.size() == 2) {
-                emit user_found("", parts[0], parts[1].toUShort());
-            }
+            QString data = response.mid(6);
+            int sep = data.lastIndexOf("|");
+            QString host = data.left(sep);
+            quint16 port = data.mid(sep + 1).toUShort();
+            if (host != m_socket->localAddress().toString())
+                emit user_found("", host, port);
         } else if (response == "NOT_FOUND") {
             emit user_not_found("");
         }
