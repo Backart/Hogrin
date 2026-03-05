@@ -55,6 +55,8 @@ qt_add_executable(appHogrin
     # DB
     src/db/include/db_manager.h
     src/db/src/db_manager.cpp
+    src/db/include/local_db.h
+    src/db/src/local_db.cpp
 )
 
 qt_add_qml_module(appHogrin

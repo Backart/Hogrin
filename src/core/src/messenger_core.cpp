@@ -9,6 +9,7 @@ Messenger_Core::Messenger_Core(QObject *parent)
     , m_bootstrap(new Bootstrap_Client(this))
     , m_crypto(new Crypto_Manager())
     , m_poll_timer(new QTimer(this))
+    , m_local_db(new Local_DB(this))
 {
     setup_handlers();
     // connect(от_кого, &От_Кого::сигнал, кому, &Кому::слот);
@@ -71,8 +72,8 @@ DataPacket Messenger_Core::deserialize_packet(const QByteArray &bytes){
     return packet;
 }
 
-void Messenger_Core::handle_data_received(const QByteArray &data){
-
+void Messenger_Core::handle_data_received(const QByteArray &data)
+{
     if (data.isEmpty()) return;
 
     QByteArray decrypted = data;
@@ -98,25 +99,27 @@ void Messenger_Core::handle_data_received(const QByteArray &data){
 
 void Messenger_Core::setup_handlers(){
     m_handlers[MessageType::ChatMessage] = [this](const DataPacket &packet){
-
         QDataStream stream(packet.data);
+        QString sender_name;
+        QString message_text;
+        stream >> sender_name >> message_text;
 
-        QString senderName;
-        QString messageText;
-
-        stream >> senderName >> messageText;
-
-        if(stream.status() != QDataStream::Ok){
+        if (stream.status() != QDataStream::Ok) {
             qDebug() << "Error reading chat message stream";
             return;
         }
 
-        qDebug() << "New message from" << senderName
-                 << ":"<< messageText
+        m_local_db->save_message(sender_name,
+                                 sender_name,
+                                 message_text,
+                                 packet.timestamp,
+                                 false); // входящее
+
+        qDebug() << "New message from" << sender_name
+                 << ":" << message_text
                  << packet.timestamp.toString("hh:mm:ss");
 
-
-        emit message_received(senderName, messageText);
+        emit message_received(sender_name, message_text);
     };
     // add new type
 }
@@ -145,13 +148,23 @@ void Messenger_Core::send_message(const QString &username, const QString &text)
     if (m_relay_mode) {
         if (m_pending_peer.isEmpty()) {
             qWarning() << "Relay mode but no pending peer set";
+            m_local_db->enqueue_message(m_pending_peer, bytes); // в очередь
         } else {
             m_bootstrap->store_message(m_pending_peer, bytes);
             qDebug() << "Message sent via relay to:" << m_pending_peer;
         }
-    } else {
+    } else if (m_network->has_connections()) {
         m_network->send_data(bytes);
+    } else {
+        qDebug() << "No connection — queuing message for:" << m_pending_peer;
+        m_local_db->enqueue_message(m_pending_peer, bytes);
     }
+
+    m_local_db->save_message(m_pending_peer,
+                             username,
+                             text,
+                             packet.timestamp,
+                             true);
 
     emit message_received(username, text);
 }
@@ -240,6 +253,13 @@ void Messenger_Core::on_peer_found(const QString &nickname,
         return;
     }
 
+    if (m_local_db->has_pending(nickname)) {
+        qDebug() << "Retransmitting queued messages to:" << nickname;
+        for (const QByteArray &blob : m_local_db->dequeue_messages(nickname)) {
+            m_bootstrap->store_message(nickname, blob);
+        }
+    }
+
     qDebug() << "Key exchange OK, connecting to" << host << port;
     emit peer_found(nickname, host, port);
 }
@@ -263,4 +283,12 @@ void Messenger_Core::poll_relay_messages()
 void Messenger_Core::set_current_nickname(const QString &nickname)
 {
     m_current_nickname = nickname;
+
+    if (!m_local_db->init(nickname))
+        qWarning() << "Local_DB init failed for:" << nickname;
+}
+
+QList<Message_Record> Messenger_Core::load_history(const QString &peer, int limit)
+{
+    return m_local_db->load_history(peer, limit);
 }
