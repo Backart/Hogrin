@@ -13,6 +13,7 @@
 #include "../common/types.h"
 #include "db_manager.h"
 #include "bootstrap_client.h"
+#include "crypto_manager.h"
 
 
 class Messenger_Core: public QObject{
@@ -52,20 +53,27 @@ signals:
 private slots:
 
     void handle_data_received(const QByteArray &data);
+    void on_peer_found(const QString &nickname,
+                       const QString &host,
+                       quint16 port,
+                       const QByteArray &peer_public_key);
 
 private:
+
     std::map<MessageType, std::function<void(const DataPacket&)>> m_handlers;
 
-    Network_Manager *m_network;
-
-    DataPacket deserialize_packet(const QByteArray &bytes);
-    QByteArray serialize_packet(const DataPacket &packet);
-    void setup_handlers();
-
-    DB_Manager *m_db;
-
+    Network_Manager  *m_network;
+    DB_Manager       *m_db;
     Bootstrap_Client *m_bootstrap;
+    Crypto_Manager   *m_crypto;
+
     quint16 m_listening_port = 0;
+
+    QByteArray serialize_packet(const DataPacket &packet);
+    DataPacket deserialize_packet(const QByteArray &bytes);
+    void       setup_handlers();
+
+
 };
 
 
