@@ -15,6 +15,7 @@
 #include "db_manager.h"
 #include "bootstrap_client.h"
 #include "crypto_manager.h"
+#include "local_db.h"
 
 
 class Messenger_Core: public QObject{
@@ -46,6 +47,8 @@ public:
     void unregister_from_bootstrap(const QString &nickname);
 
     void set_current_nickname(const QString &nickname);
+
+    QList<Message_Record> load_history(const QString &peer, int limit = 100);
 
 signals:
 
@@ -84,6 +87,8 @@ private:
     QString  m_current_nickname;
     QString  m_pending_peer;
     bool     m_relay_mode = false;
+
+    Local_DB *m_local_db;
 };
 
 

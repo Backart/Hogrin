@@ -21,6 +21,9 @@ UI_Handler::UI_Handler(Messenger_Core *core,QObject *parent)
             this, [this](const QString &){
                 emit peer_not_found();
             });
+
+    connect(m_core, &Messenger_Core::relay_mode_activated,
+            this, &UI_Handler::relay_mode_activated);
 }
 
 void UI_Handler::send_message_from_ui(const QString &username, const QString &text){
@@ -111,4 +114,9 @@ void UI_Handler::register_on_bootstrap(const QString &nickname)
 void UI_Handler::find_peer(const QString &nickname)
 {
     m_core->find_peer(nickname);
+}
+
+QList<Message_Record> UI_Handler::load_history(const QString &peer, int limit)
+{
+    return m_core->load_history(peer, limit);
 }
