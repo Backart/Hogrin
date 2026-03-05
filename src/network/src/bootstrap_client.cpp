@@ -12,11 +12,13 @@ Bootstrap_Client::Bootstrap_Client(QObject *parent)
 
         if (response.startsWith("FOUND:")) {
             QString data = response.mid(6);
-            int sep = data.lastIndexOf("|");
-            QString host = data.left(sep);
-            quint16 port = data.mid(sep + 1).toUShort();
-            //if (host != m_socket->localAddress().toString())
-                emit user_found("", host, port);
+            QStringList parts = data.split("|");
+            if (parts.size() == 3) {               // host | port | pubkey
+                QString host        = parts[0];
+                quint16 port        = parts[1].toUShort();
+                QByteArray pub_key  = QByteArray::fromHex(parts[2].toUtf8());
+                emit user_found("", host, port, pub_key);
+            }
         } else if (response == "NOT_FOUND") {
             emit user_not_found("");
         }
@@ -41,12 +43,17 @@ void Bootstrap_Client::connect_and_send(const QString &message)
     m_socket->connectToHost(QString(Config::BOOTSTRAP_SERVER), Config::BOOTSTRAP_PORT);
 }
 
-void Bootstrap_Client::register_user(const QString &nickname, quint16 port)
+void Bootstrap_Client::register_user(const QString &nickname,
+                                     quint16 port,
+                                     const QByteArray &public_key)
 {
-    connect_and_send(QString("REGISTER:%1:%2").arg(nickname).arg(port));
+    QString pubkey_hex = QString::fromUtf8(public_key.toHex());
+    connect_and_send(QString("REGISTER:%1:%2:%3")
+                         .arg(nickname)
+                         .arg(port)
+                         .arg(pubkey_hex));
     qDebug() << "Registering on bootstrap:" << nickname;
 }
-
 void Bootstrap_Client::find_user(const QString &nickname)
 {
     connect_and_send(QString("FIND:%1").arg(nickname));

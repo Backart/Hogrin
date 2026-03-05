@@ -7,6 +7,7 @@ Messenger_Core::Messenger_Core(QObject *parent)
     , m_network(new Network_Manager(this))
     , m_db(new DB_Manager(this))
     , m_bootstrap(new Bootstrap_Client(this))
+    , m_crypto(new Crypto_Manager())
 {
     setup_handlers();
     // connect(от_кого, &От_Кого::сигнал, кому, &Кому::слот);
@@ -15,7 +16,8 @@ Messenger_Core::Messenger_Core(QObject *parent)
             this, &Messenger_Core::handle_data_received);
 
     connect(m_bootstrap, &Bootstrap_Client::user_found,
-            this, &Messenger_Core::peer_found);
+            this, &Messenger_Core::on_peer_found);
+
     connect(m_bootstrap, &Bootstrap_Client::user_not_found,
             this, &Messenger_Core::peer_not_found);
 }
@@ -57,16 +59,25 @@ DataPacket Messenger_Core::deserialize_packet(const QByteArray &bytes){
 
 void Messenger_Core::handle_data_received(const QByteArray &data){
 
-    if(data.isEmpty()) return;
+    if (data.isEmpty()) return;
 
-    DataPacket packet = deserialize_packet(data);
+    QByteArray decrypted = data;
 
-    auto iterator = m_handlers.find(packet.type);
+    if (m_crypto->is_ready()) {
+        decrypted = m_crypto->decrypt(data);
+        if (decrypted.isEmpty()) {
+            qWarning() << "Decryption failed — dropping packet";
+            return;
+        }
+    }
 
-    if(iterator != m_handlers.end()){
-        iterator->second(packet);
-    }else{
-        qDebug() << "Warning: No handler registered for packet type:"
+    DataPacket packet = deserialize_packet(decrypted);
+
+    auto it = m_handlers.find(packet.type);
+    if (it != m_handlers.end()) {
+        it->second(packet);
+    } else {
+        qDebug() << "Warning: No handler for packet type:"
                  << static_cast<quint8>(packet.type);
     }
 }
@@ -98,21 +109,26 @@ void Messenger_Core::setup_handlers(){
 
 void Messenger_Core::send_message(const QString &username, const QString &text){
 
-    if(text.isEmpty()) return;
+    if (text.isEmpty()) return;
 
     QByteArray payload;
     QDataStream stream(&payload, QIODevice::WriteOnly);
-
     stream << username << text;
 
     DataPacket packet;
-    packet.type = MessageType::ChatMessage;
+    packet.type      = MessageType::ChatMessage;
     packet.timestamp = QDateTime::currentDateTime();
-    packet.data = payload;
+    packet.data      = payload;
 
     QByteArray bytes = serialize_packet(packet);
 
-    if(m_network)
+    if (m_crypto->is_ready()) {
+        bytes = m_crypto->encrypt(bytes);
+    } else {
+        qWarning() << "Sending unencrypted — key exchange not done";
+    }
+
+    if (m_network)
         m_network->send_data(bytes);
 
     emit message_received(username, text);
@@ -174,7 +190,9 @@ void Messenger_Core::register_on_bootstrap(const QString &nickname)
         qWarning() << "Cannot register: server not started yet";
         return;
     }
-    m_bootstrap->register_user(nickname, m_listening_port);
+    m_bootstrap->register_user(nickname,
+                               m_listening_port,
+                               m_crypto->public_key());
 }
 
 void Messenger_Core::find_peer(const QString &nickname)
@@ -185,4 +203,17 @@ void Messenger_Core::find_peer(const QString &nickname)
 void Messenger_Core::unregister_from_bootstrap(const QString &nickname)
 {
     m_bootstrap->unregister_user(nickname);
+}
+
+void Messenger_Core::on_peer_found(const QString &nickname,
+                                   const QString &host,
+                                   quint16 port,
+                                   const QByteArray &peer_public_key)
+{
+    if (!m_crypto->compute_shared_secret(peer_public_key)) {
+        qWarning() << "Key exchange failed with peer:" << nickname;
+        return;
+    }
+    qDebug() << "Key exchange OK, connecting to" << host << port;
+    emit peer_found(nickname, host, port);
 }

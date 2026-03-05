@@ -52,12 +52,11 @@ static QString hashPassword(const QString &password) {
 
 bool UI_Handler::register_user(const QString &nickname, const QString &password)
 {
-    return m_core->register_user(nickname, hashPassword(password));
+    return m_core->register_user(nickname, Crypto_Manager::hash_password(password));
 }
-
 bool UI_Handler::login_user(const QString &nickname, const QString &password)
 {
-    if (!m_core->login_user(nickname, hashPassword(password)))
+    if (!m_core->login_user(nickname, Crypto_Manager::hash_password(password)))
         return false;
 
     QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
