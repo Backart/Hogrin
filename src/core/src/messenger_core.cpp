@@ -292,3 +292,5 @@ QList<Message_Record> Messenger_Core::load_history(const QString &peer, int limi
 {
     return m_local_db->load_history(peer, limit);
 }
+
+quint16 Messenger_Core::get_listening_port() const { return m_listening_port; }

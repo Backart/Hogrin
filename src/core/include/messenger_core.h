@@ -50,6 +50,8 @@ public:
 
     QList<Message_Record> load_history(const QString &peer, int limit = 100);
 
+    quint16 get_listening_port() const;
+
 signals:
 
     void message_received(const QString &text, const QString &username);
