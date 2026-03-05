@@ -119,6 +119,7 @@ void Messenger_Core::send_message(const QString &username, const QString &text){
 }
 
 bool Messenger_Core::start_server(quint16 port){
+    m_listening_port = port;
     return m_network->start_server(port);
 }
 
@@ -169,10 +170,19 @@ void Messenger_Core::update_last_seen(const QString &nickname)
 
 void Messenger_Core::register_on_bootstrap(const QString &nickname)
 {
-    m_bootstrap->register_user(nickname, Config::BOOTSTRAP_PORT);
+    if (m_listening_port == 0) {
+        qWarning() << "Cannot register: server not started yet";
+        return;
+    }
+    m_bootstrap->register_user(nickname, m_listening_port);
 }
 
 void Messenger_Core::find_peer(const QString &nickname)
 {
     m_bootstrap->find_user(nickname);
+}
+
+void Messenger_Core::unregister_from_bootstrap(const QString &nickname)
+{
+    m_bootstrap->unregister_user(nickname);
 }

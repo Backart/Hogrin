@@ -14,6 +14,8 @@ public:
     void sendMessage(const QByteArray &data);
     bool isConnected() const;
 
+    void close();
+
 signals:
     void dataReceived(const QByteArray &data);
     void disconnected();

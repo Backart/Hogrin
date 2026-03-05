@@ -57,3 +57,12 @@ bool Tcp_Connection::isConnected() const
 {
     return m_socket->state() == QAbstractSocket::ConnectedState;
 }
+
+void Tcp_Connection::close()
+{
+    if (m_socket->state() != QAbstractSocket::UnconnectedState) {
+        m_socket->disconnectFromHost();
+        if (m_socket->state() != QAbstractSocket::UnconnectedState)
+            m_socket->abort();
+    }
+}

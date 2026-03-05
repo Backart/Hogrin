@@ -17,6 +17,7 @@ Window {
     property bool isTablet: width >= 600 && width < 1024
     property bool isAuthenticated: false
     property string loggedInUser: ""
+    property string activeChatUser: ""
 
     readonly property string currentUsername: loggedInUser
 
