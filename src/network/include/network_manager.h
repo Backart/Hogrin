@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QTcpServer>
+#include <QTimer>
 #include <QList>
 #include "tcp_connection.h"
 #include "../common/config.h"
@@ -28,6 +29,8 @@ signals:
     void disconnected();
     void data_received(const QByteArray &data);
 
+    void p2p_failed();
+
 private slots:
     // Внутренние слоты
     void handle_new_connection();
@@ -41,6 +44,8 @@ private:
 
     bool m_handshake_done = false;
     void handle_handshake(Tcp_Connection *connection, const QByteArray &data);
+
+    QTimer *m_p2p_timeout_timer;
 };
 
 #endif

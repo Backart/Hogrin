@@ -20,24 +20,47 @@ bool Network_Manager::start_server(quint16 port){
     return false;
 }
 
-void Network_Manager::connect_to_host(const QString &host, quint16 port){
+void Network_Manager::connect_to_host(const QString &host, quint16 port)
+{
     qDebug() << "Connecting to" << host << ":" << port;
     QTcpSocket *socket = new QTcpSocket();
-
     Tcp_Connection *connection = new Tcp_Connection(socket, this);
 
-    connect(socket, &QTcpSocket::connected, this, [connection](){
+    // timeout P2P attempt
+    QTimer *timeout = new QTimer(this);
+    timeout->setSingleShot(true);
+
+    connect(socket, &QTcpSocket::connected, this, [this, connection, timeout](){
+        timeout->stop();
+        timeout->deleteLater();
         connection->sendMessage(QByteArray(Config::HANDSHAKE_TOKEN));
+        emit connected();
     });
 
-    socket->connectToHost(host, port);
-    connect(connection, &Tcp_Connection::dataReceived, this, &Network_Manager::handle_data_received);
+    connect(timeout, &QTimer::timeout, this, [this, socket, connection, timeout](){
+        qDebug() << "P2P connection timeout — fallback to relay";
+        timeout->deleteLater();
+
+        // remove connection
+        m_connections.removeAll(connection);
+        connection->deleteLater();
+        socket->abort();
+
+        emit p2p_failed();
+    });
+
+    connect(connection, &Tcp_Connection::dataReceived,
+            this, &Network_Manager::handle_data_received);
+
     connect(connection, &Tcp_Connection::disconnected, this, [this, connection](){
         m_connections.removeAll(connection);
         connection->deleteLater();
         emit disconnected();
     });
+
     m_connections.append(connection);
+    socket->connectToHost(host, port);
+    timeout->start(Config::P2P_TIMEOUT_MS);
 }
 
 void Network_Manager::handle_new_connection(){

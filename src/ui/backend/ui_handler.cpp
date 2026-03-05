@@ -54,10 +54,13 @@ bool UI_Handler::register_user(const QString &nickname, const QString &password)
 {
     return m_core->register_user(nickname, Crypto_Manager::hash_password(password));
 }
+
 bool UI_Handler::login_user(const QString &nickname, const QString &password)
 {
     if (!m_core->login_user(nickname, Crypto_Manager::hash_password(password)))
         return false;
+
+    m_core->set_current_nickname(nickname); // добавить
 
     QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
     m_core->create_session(nickname, token);
