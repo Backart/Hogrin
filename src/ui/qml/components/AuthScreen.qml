@@ -302,6 +302,7 @@ Rectangle {
 
         if (success) {
             authRoot.errorText = ""
+            backend.start_server(0)
             authRoot.authSuccess(nick)
         }
     }

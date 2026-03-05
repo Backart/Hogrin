@@ -30,6 +30,12 @@ else()
 endif()
 # ─────────────────────────────────────────────────────────────
 
+if (ANDROID)
+    set_target_properties(appHogrin PROPERTIES
+        QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/android"
+    )
+endif()
+
 qt_add_executable(appHogrin
     # App entry point
     src/app/main.cpp

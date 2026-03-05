@@ -46,13 +46,6 @@ bool UI_Handler::connect_to_database(const QString &host, int port,
     return m_core->connect_to_database(host, port, dbName, user, password);
 }
 
-static QString hashPassword(const QString &password) {
-    return QString(QCryptographicHash::hash(
-                       password.toUtf8(),
-                       QCryptographicHash::Sha256
-                       ).toHex());
-}
-
 bool UI_Handler::register_user(const QString &nickname, const QString &password)
 {
     return m_core->register_user(nickname, Crypto_Manager::hash_password(password));
@@ -119,4 +112,9 @@ void UI_Handler::find_peer(const QString &nickname)
 QList<Message_Record> UI_Handler::load_history(const QString &peer, int limit)
 {
     return m_core->load_history(peer, limit);
+}
+
+quint16 UI_Handler::get_listening_port() const
+{
+    return m_core->get_listening_port();
 }
