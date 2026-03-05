@@ -10,6 +10,7 @@ public:
     explicit Bootstrap_Client(QObject *parent = nullptr);
     void register_user(const QString &nickname, quint16 port);
     void find_user(const QString &nickname);
+    void unregister_user(const QString &nickname);
 
 signals:
     void user_found(const QString &nickname, const QString &host, quint16 port);

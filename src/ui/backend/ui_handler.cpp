@@ -84,10 +84,18 @@ bool UI_Handler::check_saved_session()
     return true;
 }
 
+void UI_Handler::unregister_from_bootstrap(const QString &nickname)
+{
+    m_core->unregister_from_bootstrap(nickname);
+}
+
 void UI_Handler::logout()
 {
     QSettings settings("Hogrin", "Hogrin");
-    QString token = settings.value("session/token").toString();
+    QString token    = settings.value("session/token").toString();
+    QString nickname = settings.value("session/nickname").toString();
+
+    unregister_from_bootstrap(nickname);
     m_core->remove_session(token);
     settings.remove("session/token");
     settings.remove("session/nickname");

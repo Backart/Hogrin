@@ -41,6 +41,8 @@ public:
     void register_on_bootstrap(const QString &nickname);
     void find_peer(const QString &nickname);
 
+    void unregister_from_bootstrap(const QString &nickname);
+
 signals:
 
     void message_received(const QString &text, const QString &username);
@@ -63,6 +65,7 @@ private:
     DB_Manager *m_db;
 
     Bootstrap_Client *m_bootstrap;
+    quint16 m_listening_port = 0;
 };
 
 

@@ -84,6 +84,28 @@ Rectangle {
             Item {
                 clip: true
 
+                ListModel { id: contactsModel }
+
+                Connections {
+                    target: backend
+
+                    function onPeer_found(host, port) {
+                        let foundName = searchField.text.trim() || "Unknown"
+                        backend.connect_to_host(host, port)
+
+                        contactsModel.append({
+                            "nickname": foundName,
+                            "isOnline": true
+                        })
+                        searchToast.statusText = ""
+                    }
+
+                    function onPeer_not_found() {
+                        searchToast.searchSuccess = false
+                        searchToast.statusText = "Not found"
+                    }
+                }
+
                 ColumnLayout {
                     anchors.fill: parent
                     spacing: 0
@@ -109,20 +131,25 @@ Rectangle {
                                 RowLayout {
                                     anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
                                     spacing: 6
-
                                     Text {
                                         text: "@"
                                         font.pixelSize: 14
                                         font.weight: Font.Bold
                                         color: theme.accent
                                     }
-
                                     TextInput {
                                         id: searchField
                                         Layout.fillWidth: true
                                         font.pixelSize: 13
                                         color: theme.text
                                         clip: true
+
+                                        onTextChanged: {
+                                            if (text.length === 0) {
+                                                contactsModel.clear()
+                                                searchToast.statusText = ""
+                                            }
+                                        }
 
                                         Text {
                                             anchors.fill: parent
@@ -132,10 +159,10 @@ Rectangle {
                                             visible: searchField.text.length === 0
                                             verticalAlignment: Text.AlignVCenter
                                         }
-
                                         Keys.onReturnPressed: {
                                             if (searchField.text.trim().length > 0) {
-                                                searchStatus.parent.searchSuccess = false
+                                                searchToast.searchSuccess = false
+                                                searchToast.statusText = "Searching..."
                                                 backend.find_peer(searchField.text.trim())
                                             }
                                         }
@@ -149,14 +176,7 @@ Rectangle {
                                 color: searchArea.containsMouse ? theme.accentHover : theme.accent
                                 opacity: searchField.text.length > 0 ? 1.0 : 0.4
                                 Behavior on opacity { NumberAnimation { duration: 150 } }
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "→"
-                                    font.pixelSize: 16
-                                    color: "#FFFFFF"
-                                }
-
+                                Text { anchors.centerIn: parent; text: "→"; font.pixelSize: 16; color: "#FFFFFF" }
                                 MouseArea {
                                     id: searchArea
                                     anchors.fill: parent
@@ -164,7 +184,8 @@ Rectangle {
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
                                         if (searchField.text.trim().length > 0) {
-                                            searchStatus.parent.searchSuccess = false
+                                            searchToast.searchSuccess = false
+                                            searchToast.statusText = "Searching..."
                                             backend.find_peer(searchField.text.trim())
                                         }
                                     }
@@ -177,48 +198,57 @@ Rectangle {
 
                     // Toast
                     Rectangle {
+                        id: searchToast
                         Layout.fillWidth: true
-                        height: searchStatus.text.length > 0 ? 32 : 0
-                        color: searchSuccess ? "#1A3A1A" : "#3A1A1A"
+                        height: statusText.length > 0 ? 40 : 0
+                        color: searchSuccess ? "#1A3A1A" : "#3A2A2A"
                         clip: true
 
                         property bool searchSuccess: false
+                        property string statusText: ""
 
                         Behavior on height { NumberAnimation { duration: 200 } }
 
                         Text {
-                            id: searchStatus
                             anchors.centerIn: parent
-                            font.pixelSize: 12
-                            color: parent.searchSuccess ? theme.online : "#E05C5C"
-                        }
-
-                        Connections {
-                            target: backend
-                            function onPeer_found(host, port) {
-                                if (searchStatus.parent.searchSuccess) return  // guard
-                                searchStatus.parent.searchSuccess = true
-                                searchStatus.text = "Found! Connecting..."
-                                backend.connect_to_host(host, port)
-                                searchField.text = ""
-                            }
-                            function onPeer_not_found() {
-                                searchStatus.parent.searchSuccess = false
-                                searchStatus.text = "User not found"
-                            }
+                            text: searchToast.statusText
+                            font.pixelSize: 13
+                            color: searchToast.searchSuccess ? theme.online : "#E59A5A"
                         }
                     }
 
+                    // Contacts list
                     ListView {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: ["Global Chat"]
+                        model: contactsModel
                         topMargin: 8; bottomMargin: 8
+                        clip: true
+
+                        Item {
+                            anchors.centerIn: parent
+                            visible: contactsModel.count === 0 && searchField.text.length === 0
+                            Column {
+                                anchors.centerIn: parent
+                                spacing: 8
+                                opacity: 0.4
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: "🔍"
+                                    font.pixelSize: 28
+                                }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: "Search contacts"
+                                    font.pixelSize: 13
+                                    color: theme.textSecondary
+                                }
+                            }
+                        }
 
                         delegate: ItemDelegate {
                             width: parent.width
                             height: 60
-                            highlighted: true
 
                             background: Rectangle {
                                 radius: theme.radiusSmall
@@ -234,38 +264,38 @@ Rectangle {
                                 spacing: 10
 
                                 AvatarCircle {
-                                    name: "#"
-                                    fontSize: 16
+                                    name: model.nickname
+                                    fontSize: 14
                                     width: 38; height: 38
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: width / 2
-                                        color: "#2B3080"
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: "#"
-                                            font.pixelSize: 16
-                                            font.weight: Font.Bold
-                                            color: theme.accent
-                                        }
-                                    }
                                 }
 
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 2
+                                    spacing: 3
                                     Text {
-                                        text: modelData
+                                        text: model.nickname
                                         font.pixelSize: 14
                                         font.weight: Font.Medium
                                         color: theme.text
                                     }
-                                    Text {
-                                        text: chatModel.count + " messages"
-                                        font.pixelSize: 12
-                                        color: theme.textSecondary
+                                    Row {
+                                        spacing: 5
+                                        Rectangle {
+                                            width: 7; height: 7; radius: 4
+                                            color: model.isOnline ? theme.online : theme.textMuted
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                        Text {
+                                            text: model.isOnline ? "online" : "offline"
+                                            font.pixelSize: 11
+                                            color: theme.textSecondary
+                                        }
                                     }
                                 }
+                            }
+
+                            onClicked: {
+                                root.activeChatUser = model.nickname
                             }
                         }
                     }
@@ -287,7 +317,6 @@ Rectangle {
                     SectionLabel { label: "Appearance" }
                     Item { height: 8 }
 
-                    // Dark mode — без SettingsCard, простой Rectangle
                     Rectangle {
                         Layout.fillWidth: true
                         height: 52

@@ -87,7 +87,8 @@ void Network_Manager::handle_data_received(const QByteArray &data){
 }
 
 void Network_Manager::disconnect_from_host(){
-    for(auto *conn : m_connections){
+    for (auto *conn : m_connections) {
+        conn->close();
         conn->deleteLater();
     }
     m_connections.clear();

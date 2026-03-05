@@ -103,57 +103,62 @@ Rectangle {
                     onClicked: root.sidebarOpen = !root.sidebarOpen
                 }
 
-                // Channel icon
-                Rectangle {
-                    width: 38; height: 38
-                    radius: 12
-                    color: theme.bgActive
+                RowLayout {
+                    spacing: 12
+                    visible: root.activeChatUser !== undefined && root.activeChatUser !== ""
 
-                    // Subtle gradient
+                    // Channel icon
                     Rectangle {
-                        anchors.fill: parent
-                        radius: parent.radius
-                        gradient: Gradient {
-                            GradientStop { position: 0.0; color: "#30FFFFFF" }
-                            GradientStop { position: 1.0; color: "transparent" }
-                        }
-                    }
+                        width: 38; height: 38
+                        radius: 12
+                        color: theme.bgActive
 
-                    Text {
-                        anchors.centerIn: parent
-                        text: "#"
-                        font.pixelSize: 18
-                        font.weight: Font.Bold
-                        color: theme.accent
-                    }
-                }
-
-                ColumnLayout {
-                    spacing: 2
-                    Text {
-                        text: "Global Chat"
-                        font.pixelSize: 15
-                        font.weight: Font.SemiBold
-                        color: theme.text
-                    }
-                    Row {
-                        spacing: 5
+                        // Subtle gradient
                         Rectangle {
-                            width: 7; height: 7; radius: 4
-                            color: theme.online
-                            anchors.verticalCenter: parent.verticalCenter
-
-                            // Pulse glow
-                            SequentialAnimation on opacity {
-                                loops: Animation.Infinite
-                                NumberAnimation { from: 1.0; to: 0.4; duration: 1200; easing.type: Easing.InOutSine }
-                                NumberAnimation { from: 0.4; to: 1.0; duration: 1200; easing.type: Easing.InOutSine }
+                            anchors.fill: parent
+                            radius: parent.radius
+                            gradient: Gradient {
+                                GradientStop { position: 0.0; color: "#30FFFFFF" }
+                                GradientStop { position: 1.0; color: "transparent" }
                             }
                         }
+
                         Text {
-                            text: "online"
-                            font.pixelSize: 11
-                            color: theme.textSecondary
+                            anchors.centerIn: parent
+                            text: "#"
+                            font.pixelSize: 18
+                            font.weight: Font.Bold
+                            color: theme.accent
+                        }
+                    }
+
+                    ColumnLayout {
+                        spacing: 2
+                        Text {
+                            text: root.activeChatUser !== undefined ? root.activeChatUser : ""
+                            font.pixelSize: 15
+                            font.weight: Font.SemiBold
+                            color: theme.text
+                        }
+                        Row {
+                            spacing: 5
+                            Rectangle {
+                                width: 7; height: 7; radius: 4
+                                color: theme.online
+                                anchors.verticalCenter: parent.verticalCenter
+
+                                // Pulse glow
+                                SequentialAnimation on opacity {
+                                    loops: Animation.Infinite
+                                    NumberAnimation { from: 1.0; to: 0.4; duration: 1200; easing.type: Easing.InOutSine }
+                                    NumberAnimation { from: 0.4; to: 1.0; duration: 1200; easing.type: Easing.InOutSine }
+                                }
+                            }
+                            Text {
+                                text: "online"
+                                font.pixelSize: 11
+                                color: theme.textSecondary
+                            }
                         }
                     }
                 }
@@ -169,6 +174,7 @@ Rectangle {
 
             ListView {
                 id: messageList
+                visible: root.activeChatUser !== undefined && root.activeChatUser !== ""
                 anchors.fill: parent
                 clip: true
                 model: chatModel
@@ -191,12 +197,25 @@ Rectangle {
                 }
             }
 
-            // ── Empty state ──────────────────────────────────
             Column {
                 anchors.centerIn: parent
                 spacing: 12
-                visible: chatModel.count === 0
+                visible: root.activeChatUser === undefined || root.activeChatUser === ""
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Select a chat to start messaging"
+                    font.pixelSize: 15
+                    font.weight: Font.SemiBold
+                    color: theme.text
+                }
+            }
+
+            Column {
+                anchors.centerIn: parent
+                spacing: 12
                 opacity: 0.5
+                visible: root.activeChatUser !== undefined && root.activeChatUser !== "" && chatModel.count === 0
 
                 // Icon circle
                 Rectangle {
@@ -235,6 +254,7 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             height: 76
+            visible: root.activeChatUser !== undefined && root.activeChatUser !== ""
             color: theme.bgSide
 
             Rectangle {
