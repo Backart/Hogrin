@@ -8,6 +8,7 @@ Messenger_Core::Messenger_Core(QObject *parent)
     , m_db(new DB_Manager(this))
     , m_bootstrap(new Bootstrap_Client(this))
     , m_crypto(new Crypto_Manager())
+    , m_poll_timer(new QTimer(this))
 {
     setup_handlers();
     // connect(от_кого, &От_Кого::сигнал, кому, &Кому::слот);
@@ -15,11 +16,24 @@ Messenger_Core::Messenger_Core(QObject *parent)
     connect(m_network, &Network_Manager::data_received,
             this, &Messenger_Core::handle_data_received);
 
+    connect(m_network, &Network_Manager::p2p_failed,
+            this, &Messenger_Core::on_p2p_failed);
+
     connect(m_bootstrap, &Bootstrap_Client::user_found,
             this, &Messenger_Core::on_peer_found);
-
     connect(m_bootstrap, &Bootstrap_Client::user_not_found,
             this, &Messenger_Core::peer_not_found);
+
+    // Relay
+    connect(m_bootstrap, &Bootstrap_Client::messages_fetched,
+            this, [this](const QList<QByteArray> &messages){
+                for (const QByteArray &blob : messages) {
+                    handle_data_received(blob);
+                }
+            });
+
+    connect(m_poll_timer, &QTimer::timeout,
+            this, &Messenger_Core::poll_relay_messages);
 }
 
 QByteArray Messenger_Core::serialize_packet(const DataPacket &packet){
@@ -107,8 +121,8 @@ void Messenger_Core::setup_handlers(){
     // add new type
 }
 
-void Messenger_Core::send_message(const QString &username, const QString &text){
-
+void Messenger_Core::send_message(const QString &username, const QString &text)
+{
     if (text.isEmpty()) return;
 
     QByteArray payload;
@@ -128,8 +142,16 @@ void Messenger_Core::send_message(const QString &username, const QString &text){
         qWarning() << "Sending unencrypted — key exchange not done";
     }
 
-    if (m_network)
+    if (m_relay_mode) {
+        if (m_pending_peer.isEmpty()) {
+            qWarning() << "Relay mode but no pending peer set";
+        } else {
+            m_bootstrap->store_message(m_pending_peer, bytes);
+            qDebug() << "Message sent via relay to:" << m_pending_peer;
+        }
+    } else {
         m_network->send_data(bytes);
+    }
 
     emit message_received(username, text);
 }
@@ -210,10 +232,35 @@ void Messenger_Core::on_peer_found(const QString &nickname,
                                    quint16 port,
                                    const QByteArray &peer_public_key)
 {
+    m_pending_peer = nickname;
+    m_relay_mode   = false;
+
     if (!m_crypto->compute_shared_secret(peer_public_key)) {
         qWarning() << "Key exchange failed with peer:" << nickname;
         return;
     }
+
     qDebug() << "Key exchange OK, connecting to" << host << port;
     emit peer_found(nickname, host, port);
+}
+
+void Messenger_Core::on_p2p_failed()
+{
+    qDebug() << "P2P failed — switching to relay mode";
+    m_relay_mode = true;
+
+    m_poll_timer->start(Config::RELAY_POLL_INTERVAL_MS);
+
+    emit relay_mode_activated();
+}
+
+void Messenger_Core::poll_relay_messages()
+{
+    if (m_current_nickname.isEmpty()) return;
+    m_bootstrap->fetch_messages(m_current_nickname);
+}
+
+void Messenger_Core::set_current_nickname(const QString &nickname)
+{
+    m_current_nickname = nickname;
 }

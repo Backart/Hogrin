@@ -8,6 +8,7 @@
 #include <QByteArray>
 #include <map>
 #include <functional>
+#include <QTimer>
 
 #include "../network/include/network_manager.h"
 #include "../common/types.h"
@@ -44,11 +45,15 @@ public:
 
     void unregister_from_bootstrap(const QString &nickname);
 
+    void set_current_nickname(const QString &nickname);
+
 signals:
 
     void message_received(const QString &text, const QString &username);
     void peer_found(const QString &nickname, const QString &host, quint16 port);
     void peer_not_found(const QString &nickname);
+
+    void relay_mode_activated();
 
 private slots:
 
@@ -57,6 +62,8 @@ private slots:
                        const QString &host,
                        quint16 port,
                        const QByteArray &peer_public_key);
+    void on_p2p_failed();
+    void poll_relay_messages();
 
 private:
 
@@ -73,7 +80,10 @@ private:
     DataPacket deserialize_packet(const QByteArray &bytes);
     void       setup_handlers();
 
-
+    QTimer  *m_poll_timer;
+    QString  m_current_nickname;
+    QString  m_pending_peer;
+    bool     m_relay_mode = false;
 };
 
 
