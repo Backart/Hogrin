@@ -53,10 +53,10 @@ bool UI_Handler::register_user(const QString &nickname, const QString &password)
 
 bool UI_Handler::login_user(const QString &nickname, const QString &password)
 {
-    if (!m_core->login_user(nickname, Crypto_Manager::hash_password(password)))
+    if (!m_core->login_user(nickname, password))
         return false;
 
-    m_core->set_current_nickname(nickname); // добавить
+    m_core->set_current_nickname(nickname);
 
     QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
     m_core->create_session(nickname, token);
@@ -87,13 +87,14 @@ void UI_Handler::unregister_from_bootstrap(const QString &nickname)
     m_core->unregister_from_bootstrap(nickname);
 }
 
-void UI_Handler::logout()
-{
+void UI_Handler::logout() {
     QSettings settings("Hogrin", "Hogrin");
     QString token    = settings.value("session/token").toString();
     QString nickname = settings.value("session/nickname").toString();
 
-    unregister_from_bootstrap(nickname);
+    if (!nickname.isEmpty())
+        unregister_from_bootstrap(nickname);
+
     m_core->remove_session(token);
     settings.remove("session/token");
     settings.remove("session/nickname");

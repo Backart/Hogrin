@@ -117,3 +117,7 @@ void Network_Manager::disconnect_from_host(){
     m_connections.clear();
     emit disconnected();
 }
+
+bool Network_Manager::has_connections() const { return !m_connections.isEmpty(); }
+
+quint16 Network_Manager::listening_port() const { return m_server->serverPort(); }

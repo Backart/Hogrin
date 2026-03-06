@@ -1,7 +1,5 @@
 #include "db_manager.h"
-#include <QSqlQuery>
-#include <QSqlError>
-#include <QDebug>
+
 
 DB_Manager::DB_Manager(QObject *parent)
     : QObject(parent)
@@ -81,11 +79,19 @@ bool DB_Manager::userExists(const QString &nickname)
 bool DB_Manager::validateUser(const QString &nickname, const QString &passwordHash)
 {
     QSqlQuery query(m_db);
-    query.prepare("SELECT 1 FROM users WHERE nickname = :nick AND password_hash = :hash AND is_banned = FALSE LIMIT 1");
+    query.prepare("SELECT password_hash FROM users "
+                  "WHERE nickname = :nick AND is_banned = FALSE LIMIT 1");
     query.bindValue(":nick", nickname);
-    query.bindValue(":hash", passwordHash);
     query.exec();
-    return query.next();
+
+    if (!query.next()) return false;
+
+    QString stored_hash = query.value(0).toString();
+
+    return crypto_pwhash_str_verify(
+               stored_hash.toUtf8().constData(),
+               passwordHash.toUtf8().constData(),
+               passwordHash.toUtf8().size()) == 0;
 }
 
 bool DB_Manager::updateLastSeen(const QString &nickname)

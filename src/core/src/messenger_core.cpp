@@ -169,9 +169,11 @@ void Messenger_Core::send_message(const QString &username, const QString &text)
     emit message_received(username, text);
 }
 
-bool Messenger_Core::start_server(quint16 port){
-    m_listening_port = port;
-    return m_network->start_server(port);
+bool Messenger_Core::start_server(quint16 port) {
+    if (m_listening_port != 0) return true;
+    bool ok = m_network->start_server(port);
+    if (ok) m_listening_port = m_network->listening_port();
+    return ok;
 }
 
 void Messenger_Core::connect_to_host(const QString &host, quint16 port){

@@ -40,6 +40,7 @@ Window {
         function onSession_restored(nickname) {
             root.loggedInUser = nickname
             root.isAuthenticated = true
+            backend.start_server(0)
             backend.register_on_bootstrap(nickname)
         }
     }

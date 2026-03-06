@@ -13,19 +13,24 @@ Local_DB::~Local_DB()
 {
     if (m_db.isOpen())
         m_db.close();
-    QSqlDatabase::removeDatabase("local_db");
+    if (!m_connection_name.isEmpty())
+        QSqlDatabase::removeDatabase(m_connection_name);
 }
 
 bool Local_DB::init(const QString &nickname)
 {
-    // Путь к БД: ~/.local/share/Hogrin/<nickname>.db
+    if (m_db.isOpen()) {
+        m_db.close();
+        QSqlDatabase::removeDatabase(m_connection_name);
+    }
+
     QString dir_path = QStandardPaths::writableLocation(
         QStandardPaths::AppDataLocation);
     QDir().mkpath(dir_path);
-
     QString db_path = dir_path + "/" + nickname + ".db";
 
-    m_db = QSqlDatabase::addDatabase("QSQLITE", "local_db");
+    m_connection_name = "local_db_" + nickname;  // уникальное имя
+    m_db = QSqlDatabase::addDatabase("QSQLITE", m_connection_name);
     m_db.setDatabaseName(db_path);
 
     if (!m_db.open()) {

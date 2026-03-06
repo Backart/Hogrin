@@ -5,7 +5,13 @@
 #include <QSqlDatabase>
 #include <QString>
 #include <QDateTime>
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QDebug>
+
+#include <sodium.h>
 #include "types.h"
+
 
 struct UserRecord {
     int      id;
@@ -35,7 +41,7 @@ public:
     // Users
     bool    registerUser(const QString &nickname, const QString &passwordHash);
     bool    userExists(const QString &nickname);
-    bool    validateUser(const QString &nickname, const QString &passwordHash);
+    bool validateUser(const QString &nickname, const QString &password);
     bool    updateLastSeen(const QString &nickname);
     std::optional<UserRecord> getUser(const QString &nickname);
 

@@ -23,7 +23,8 @@ public:
     // Отправка
     void send_data(const QByteArray &data);
 
-    bool has_connections() const { return !m_connections.isEmpty(); }
+    bool has_connections() const;
+    quint16 listening_port() const;
 
 signals:
     // Сигналы для ядра
