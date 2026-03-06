@@ -34,7 +34,7 @@ public:
                            const QString &user,
                            const QString &password);
     bool register_user(const QString &nickname, const QString &passwordHash);
-    bool login_user(const QString &nickname, const QString &passwordHash);
+    bool login_user(const QString &nickname, const QString &password);
 
     void create_session(const QString &nickname, const QString &token);
     bool session_exists(const QString &token);

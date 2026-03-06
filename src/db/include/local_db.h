@@ -48,6 +48,7 @@ private:
     bool         m_ready = false;
 
     bool create_tables();
+    QString m_connection_name;
 };
 
 #endif // LOCAL_DB_H
