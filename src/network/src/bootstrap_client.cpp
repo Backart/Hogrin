@@ -7,45 +7,65 @@ Bootstrap_Client::Bootstrap_Client(QObject *parent)
     , m_socket(new QTcpSocket(this))
 {
     connect(m_socket, &QTcpSocket::readyRead, this, [this](){
-        QString response = QString::fromUtf8(m_socket->readAll()).trimmed();
-        qDebug() << "Bootstrap response:" << response;
+        while (m_socket->canReadLine()) {
+            QString response = QString::fromUtf8(m_socket->readLine()).trimmed();
+            if (response.isEmpty()) continue;
 
-        if (response.startsWith("FOUND:")) {
-            QString data = response.mid(6);
-            QStringList parts = data.split("|");
-            if (parts.size() == 3) {
-                QString    host    = parts[0];
-                quint16    port    = parts[1].toUShort();
-                QByteArray pub_key = QByteArray::fromHex(parts[2].toUtf8());
-                emit user_found("", host, port, pub_key);
+            qDebug() << "Bootstrap response:" << response;
+
+            if (response == "AUTH_REG_OK") {
+                emit auth_register_success();
             }
-        }
-        else if (response == "NOT_FOUND") {
-            emit user_not_found("");
-        }
-        else if (response == "OK") {
-            emit store_confirmed();
-        }
-        else if (response.startsWith("ERROR:")) {
-            QString reason = response.mid(6);
-            emit store_failed(reason);
-            qWarning() << "Relay store error:" << reason;
-        }
-        else if (response == "EMPTY") {
-            emit messages_fetched({});
-        }
-        else if (response.contains("MSG:")) {
-            // Несколько сообщений разделены \n
-            QList<QByteArray> result;
-            for (const QString &line : response.split("\n")) {
-                if (line.startsWith("MSG:")) {
-                    QByteArray blob = QByteArray::fromHex(line.mid(4).toUtf8());
-                    if (!blob.isEmpty())
-                        result << blob;
+            else if (response.startsWith("AUTH_REG_ERR:")) {
+                emit auth_register_failed(response.mid(13));
+            }
+            else if (response.startsWith("AUTH_LOGIN_OK:")) {
+                QString token = response.mid(14);
+                emit auth_login_success(token, m_pending_auth_nickname);
+            }
+            else if (response.startsWith("AUTH_LOGIN_ERR:")) {
+                emit auth_login_failed(response.mid(15));
+            }
+            else if (response.startsWith("AUTH_VERIFY_OK:")) {
+                QString nickname = response.mid(15);
+                emit auth_verify_success(nickname);
+            }
+            else if (response.startsWith("AUTH_VERIFY_ERR:")) {
+                emit auth_verify_failed(response.mid(16));
+            }
+            else if (response == "AUTH_LOGOUT_OK") {
+                emit auth_logout_success();
+            }
+            else if (response.startsWith("FOUND:")) {
+                QString data = response.mid(6);
+                QStringList parts = data.split("|");
+                if (parts.size() == 3) {
+                    QString    host    = parts[0];
+                    quint16    port    = parts[1].toUShort();
+                    QByteArray pub_key = QByteArray::fromHex(parts[2].toUtf8());
+                    emit user_found(m_pending_find_nickname, host, port, pub_key);
                 }
             }
-            emit messages_fetched(result);
-            qDebug() << "Fetched" << result.size() << "relay messages";
+            else if (response == "NOT_FOUND") {
+                emit user_not_found("");
+            }
+            else if (response == "OK") {
+                emit store_confirmed();
+            }
+            else if (response.startsWith("ERROR:")) {
+                QString reason = response.mid(6);
+                emit store_failed(reason);
+                qWarning() << "Relay store error:" << reason;
+            }
+            else if (response == "EMPTY") {
+                emit messages_fetched({});
+            }
+            else if (response.startsWith("MSG:")) {
+                QByteArray blob = QByteArray::fromHex(response.mid(4).toUtf8());
+                if (!blob.isEmpty()) {
+                    emit messages_fetched({blob});
+                }
+            }
         }
     });
 }
@@ -68,6 +88,33 @@ void Bootstrap_Client::connect_and_send(const QString &message)
     m_socket->connectToHost(QString(Config::BOOTSTRAP_SERVER), Config::BOOTSTRAP_PORT);
 }
 
+void Bootstrap_Client::auth_register(const QString &nickname,
+                                     const QString &password)
+{
+    connect_and_send(QString("AUTH_REGISTER:%1:%2").arg(nickname, password));
+    qDebug() << "Registering auth on bootstrap:" << nickname;
+}
+
+void Bootstrap_Client::auth_login(const QString &nickname,
+                                  const QString &password)
+{
+    m_pending_auth_nickname = nickname; // Запам'ятовуємо нік для сигналу успіху
+    connect_and_send(QString("AUTH_LOGIN:%1:%2").arg(nickname, password));
+    qDebug() << "Logging in on bootstrap:" << nickname;
+}
+
+void Bootstrap_Client::auth_verify(const QString &token)
+{
+    connect_and_send(QString("AUTH_VERIFY:%1").arg(token));
+    qDebug() << "Verifying session token on bootstrap";
+}
+
+void Bootstrap_Client::auth_logout(const QString &token)
+{
+    connect_and_send(QString("AUTH_LOGOUT:%1").arg(token));
+    qDebug() << "Logging out on bootstrap";
+}
+
 void Bootstrap_Client::register_user(const QString &nickname,
                                      quint16 port,
                                      const QByteArray &public_key)
@@ -79,8 +126,10 @@ void Bootstrap_Client::register_user(const QString &nickname,
                          .arg(pubkey_hex));
     qDebug() << "Registering on bootstrap:" << nickname;
 }
+
 void Bootstrap_Client::find_user(const QString &nickname)
 {
+    m_pending_find_nickname = nickname;
     connect_and_send(QString("FIND:%1").arg(nickname));
     qDebug() << "Finding user:" << nickname;
 }

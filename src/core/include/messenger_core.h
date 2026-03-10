@@ -9,13 +9,19 @@
 #include <map>
 #include <functional>
 #include <QTimer>
+#include <QDataStream>
+#include <QDebug>
+#include <QMap>
 
 #include "../network/include/network_manager.h"
 #include "../common/types.h"
-#include "db_manager.h"
 #include "bootstrap_client.h"
 #include "crypto_manager.h"
 #include "local_db.h"
+
+struct PeerState {
+    bool relay_mode = false;
+};
 
 
 class Messenger_Core: public QObject{
@@ -29,17 +35,10 @@ public:
     bool start_server(quint16 port);
     void connect_to_host(const QString &host, quint16 port);
 
-    bool connect_to_database(const QString &host, int port,
-                           const QString &dbName,
-                           const QString &user,
-                           const QString &password);
-    bool register_user(const QString &nickname, const QString &passwordHash);
-    bool login_user(const QString &nickname, const QString &password);
-
-    void create_session(const QString &nickname, const QString &token);
-    bool session_exists(const QString &token);
-    void remove_session(const QString &token);
-    void update_last_seen(const QString &nickname);
+    void auth_register(const QString &nickname, const QString &password);
+    void auth_login(const QString &nickname, const QString &password);
+    void auth_verify(const QString &token);
+    void auth_logout(const QString &token);
 
     void register_on_bootstrap(const QString &nickname);
     void find_peer(const QString &nickname);
@@ -52,6 +51,8 @@ public:
 
     quint16 get_listening_port() const;
 
+    ~Messenger_Core();
+
 signals:
 
     void message_received(const QString &text, const QString &username);
@@ -59,6 +60,10 @@ signals:
     void peer_not_found(const QString &nickname);
 
     void relay_mode_activated();
+
+    void register_completed(bool success, const QString &error);
+    void login_completed(bool success, const QString &error, const QString &token, const QString &nickname);
+    void verify_completed(bool success, const QString &nickname);
 
 private slots:
 
@@ -75,15 +80,14 @@ private:
     std::map<MessageType, std::function<void(const DataPacket&)>> m_handlers;
 
     Network_Manager  *m_network;
-    DB_Manager       *m_db;
     Bootstrap_Client *m_bootstrap;
-    Crypto_Manager   *m_crypto;
 
     quint16 m_listening_port = 0;
 
     QByteArray serialize_packet(const DataPacket &packet);
     DataPacket deserialize_packet(const QByteArray &bytes);
     void       setup_handlers();
+    Crypto_Manager *crypto_for(const QString &peer);
 
     QTimer  *m_poll_timer;
     QString  m_current_nickname;
@@ -91,6 +95,10 @@ private:
     bool     m_relay_mode = false;
 
     Local_DB *m_local_db;
+
+    QMap<QString, Crypto_Manager *> m_crypto_map;
+    QMap<QString, PeerState> m_peer_state;
+
 };
 
 

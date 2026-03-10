@@ -2,7 +2,7 @@
 #include <QDebug>
 #include <stdexcept>
 
-    Crypto_Manager::Crypto_Manager()
+Crypto_Manager::Crypto_Manager()
 {
     if (sodium_init() < 0)
         throw std::runtime_error("libsodium init failed");

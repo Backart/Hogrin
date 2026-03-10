@@ -91,12 +91,13 @@ Rectangle {
 
                     function onPeer_found(host, port) {
                         let foundName = searchField.text.trim() || "Unknown"
-                        backend.connect_to_host(host, port)
 
                         contactsModel.append({
                             "nickname": foundName,
                             "isOnline": true
                         })
+
+                        root.activeChatUser = foundName
                         searchToast.statusText = ""
                     }
 

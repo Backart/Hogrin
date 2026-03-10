@@ -22,14 +22,6 @@ int main(int argc, char *argv[])
     Messenger_Core core;
     UI_Handler ui_backend(&core);
 
-    ui_backend.connect_to_database(
-        Config::DB_HOST,
-        Config::DB_PORT,
-        Config::DB_NAME,
-        Config::DB_USER,
-        Config::DB_PASSWORD
-        );
-
     engine.rootContext()->setContextProperty("backend", &ui_backend);
     engine.load(url);
     return app.exec();

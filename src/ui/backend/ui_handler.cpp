@@ -1,6 +1,4 @@
 #include "ui_handler.h"
-#include <QSettings>
-#include <QUuid>
 
 UI_Handler::UI_Handler(Messenger_Core *core,QObject *parent)
     : QObject(parent)
@@ -10,7 +8,6 @@ UI_Handler::UI_Handler(Messenger_Core *core,QObject *parent)
             [this](const QString &username, const QString &text){
             emit message_received(username, text, QDateTime::currentDateTime());
             });
-
 
     connect(m_core, &Messenger_Core::peer_found,
             this, [this](const QString &, const QString &host, quint16 port){
@@ -24,6 +21,34 @@ UI_Handler::UI_Handler(Messenger_Core *core,QObject *parent)
 
     connect(m_core, &Messenger_Core::relay_mode_activated,
             this, &UI_Handler::relay_mode_activated);
+
+    connect(m_core, &Messenger_Core::register_completed,
+            this, [this](bool success, const QString &error) {
+                emit register_result(success, error);
+            });
+
+    connect(m_core, &Messenger_Core::login_completed,
+            this, [this](bool success, const QString &error, const QString &token, const QString &nickname) {
+                if (success) {
+                    QSettings settings("Hogrin", "Hogrin");
+                    settings.setValue("session/token", token);
+                    settings.setValue("session/nickname", nickname);
+                }
+                emit login_result(success, error);
+            });
+
+    connect(m_core, &Messenger_Core::verify_completed,
+            this, [this](bool success, const QString &nickname) {
+                if (success) {
+                    emit session_restored(nickname);
+                } else {
+                    // Если токен невалиден (сервер отклонил), чистим локальные настройки
+                    QSettings settings("Hogrin", "Hogrin");
+                    settings.remove("session/token");
+                    settings.remove("session/nickname");
+                    emit session_restored(""); // Пустая строка как индикатор неудачи
+                }
+            });
 }
 
 void UI_Handler::send_message_from_ui(const QString &username, const QString &text){
@@ -38,53 +63,30 @@ void UI_Handler::connect_to_host(const QString &host, quint16 port){
     m_core->connect_to_host(host, port);
 }
 
-bool UI_Handler::connect_to_database(const QString &host, int port,
-                                   const QString &dbName,
-                                   const QString &user,
-                                   const QString &password)
+void UI_Handler::register_user(const QString &nickname, const QString &password)
 {
-    return m_core->connect_to_database(host, port, dbName, user, password);
+    // Пароль теперь не хешируем на клиенте — это задача bootstrap-сервера (Argon2id)
+    m_core->auth_register(nickname, password);
 }
 
-bool UI_Handler::register_user(const QString &nickname, const QString &password)
+void UI_Handler::login_user(const QString &nickname, const QString &password)
 {
-    return m_core->register_user(nickname, Crypto_Manager::hash_password(password));
+    m_core->auth_login(nickname, password);
 }
 
-bool UI_Handler::login_user(const QString &nickname, const QString &password)
-{
-    if (!m_core->login_user(nickname, password))
-        return false;
-
-    m_core->set_current_nickname(nickname);
-
-    QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    m_core->create_session(nickname, token);
-
-    QSettings settings("Hogrin", "Hogrin");
-    settings.setValue("session/token", token);
-    settings.setValue("session/nickname", nickname);
-
-    return true;
-}
-
-bool UI_Handler::check_saved_session()
+void UI_Handler::check_saved_session()
 {
     QSettings settings("Hogrin", "Hogrin");
     QString token    = settings.value("session/token").toString();
     QString nickname = settings.value("session/nickname").toString();
 
-    if (token.isEmpty() || nickname.isEmpty()) return false;
-    if (!m_core->session_exists(token)) return false;
+    if (token.isEmpty() || nickname.isEmpty()) {
+        emit session_restored(""); // Нет сохраненной сессии
+        return;
+    }
 
-    m_core->update_last_seen(nickname);
-    emit session_restored(nickname);
-    return true;
-}
-
-void UI_Handler::unregister_from_bootstrap(const QString &nickname)
-{
-    m_core->unregister_from_bootstrap(nickname);
+    // Асинхронно проверяем токен на сервере
+    m_core->auth_verify(token);
 }
 
 void UI_Handler::logout() {
@@ -92,12 +94,21 @@ void UI_Handler::logout() {
     QString token    = settings.value("session/token").toString();
     QString nickname = settings.value("session/nickname").toString();
 
-    if (!nickname.isEmpty())
+    if (!nickname.isEmpty()) {
         unregister_from_bootstrap(nickname);
+    }
 
-    m_core->remove_session(token);
+    if (!token.isEmpty()) {
+        m_core->auth_logout(token);
+    }
+
     settings.remove("session/token");
     settings.remove("session/nickname");
+}
+
+void UI_Handler::unregister_from_bootstrap(const QString &nickname)
+{
+    m_core->unregister_from_bootstrap(nickname);
 }
 
 void UI_Handler::register_on_bootstrap(const QString &nickname)

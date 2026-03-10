@@ -24,6 +24,7 @@ public:
     static bool    verify_password(const QString &password, const QString &hash);
 
     bool is_ready() const { return m_secret_computed; }
+    void set_server_mode(bool is_server) { m_is_server = is_server; }
 
 private:
     // Keypair

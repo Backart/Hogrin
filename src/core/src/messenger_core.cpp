@@ -1,18 +1,13 @@
 #include "messenger_core.h"
-#include <QDataStream>
-#include <QDebug>
 
 Messenger_Core::Messenger_Core(QObject *parent)
     : QObject(parent)
     , m_network(new Network_Manager(this))
-    , m_db(new DB_Manager(this))
     , m_bootstrap(new Bootstrap_Client(this))
-    , m_crypto(new Crypto_Manager())
     , m_poll_timer(new QTimer(this))
     , m_local_db(new Local_DB(this))
 {
     setup_handlers();
-    // connect(от_кого, &От_Кого::сигнал, кому, &Кому::слот);
 
     connect(m_network, &Network_Manager::data_received,
             this, &Messenger_Core::handle_data_received);
@@ -20,14 +15,26 @@ Messenger_Core::Messenger_Core(QObject *parent)
     connect(m_network, &Network_Manager::p2p_failed,
             this, &Messenger_Core::on_p2p_failed);
 
+    connect(m_network, &Network_Manager::incoming_peer_authenticated,
+            this, [this](const QByteArray &peer_pub_key) {
+
+            Crypto_Manager *crypto = crypto_for(m_pending_peer);
+            crypto->set_server_mode(true);
+
+            if (!crypto->compute_shared_secret(peer_pub_key)) {
+                qWarning() << "Failed to compute shared secret for:" << m_pending_peer;
+            } else {
+                qDebug() << "Shared secret computed for incoming P2P from:" << m_pending_peer;
+            }
+    });
+
     connect(m_bootstrap, &Bootstrap_Client::user_found,
             this, &Messenger_Core::on_peer_found);
     connect(m_bootstrap, &Bootstrap_Client::user_not_found,
             this, &Messenger_Core::peer_not_found);
 
-    // Relay
     connect(m_bootstrap, &Bootstrap_Client::messages_fetched,
-            this, [this](const QList<QByteArray> &messages){
+            this, [this](const QList<QByteArray> &messages) {
                 for (const QByteArray &blob : messages) {
                     handle_data_received(blob);
                 }
@@ -35,31 +42,79 @@ Messenger_Core::Messenger_Core(QObject *parent)
 
     connect(m_poll_timer, &QTimer::timeout,
             this, &Messenger_Core::poll_relay_messages);
+
+    // ── async auth ───────────────────────────────────────────────────────────
+
+    connect(m_bootstrap, &Bootstrap_Client::auth_register_success,
+            this, [this]() {
+                emit register_completed(true, "");
+            });
+
+    connect(m_bootstrap, &Bootstrap_Client::auth_register_failed,
+            this, [this](const QString &reason) {
+                emit register_completed(false, reason);
+            });
+
+    connect(m_bootstrap, &Bootstrap_Client::auth_login_success,
+            this, [this](const QString &token, const QString &nickname) {
+                set_current_nickname(nickname);
+                emit login_completed(true, "", token, nickname);
+            });
+
+    connect(m_bootstrap, &Bootstrap_Client::auth_login_failed,
+            this, [this](const QString &reason) {
+                emit login_completed(false, reason, "", "");
+            });
+
+    connect(m_bootstrap, &Bootstrap_Client::auth_verify_success,
+            this, [this](const QString &nickname) {
+                set_current_nickname(nickname);
+                emit verify_completed(true, nickname);
+            });
+
+    connect(m_bootstrap, &Bootstrap_Client::auth_verify_failed,
+            this, [this](const QString &reason) {
+                Q_UNUSED(reason)
+                emit verify_completed(false, "");
+            });
 }
 
-QByteArray Messenger_Core::serialize_packet(const DataPacket &packet){
-    QByteArray bytes;
+Messenger_Core::~Messenger_Core()
+{
+    qDeleteAll(m_crypto_map);
+}
 
+Crypto_Manager *Messenger_Core::crypto_for(const QString &peer)
+{
+    auto it = m_crypto_map.find(peer);
+    if (it != m_crypto_map.end())
+        return it.value();
+
+    Crypto_Manager *crypto = new Crypto_Manager(); // не QObject — без parent
+    m_crypto_map.insert(peer, crypto);
+    return crypto;
+}
+
+// ── serialization ────────────────────────────────────────────────────────────
+
+QByteArray Messenger_Core::serialize_packet(const DataPacket &packet)
+{
+    QByteArray bytes;
     QDataStream stream(&bytes, QIODevice::WriteOnly);
     stream.setVersion(QDataStream::Qt_6_0);
-
     stream << static_cast<quint8>(packet.type);
     stream << packet.timestamp;
     stream << packet.data;
-
     return bytes;
 }
 
-DataPacket Messenger_Core::deserialize_packet(const QByteArray &bytes){
+DataPacket Messenger_Core::deserialize_packet(const QByteArray &bytes)
+{
     DataPacket packet;
-
-    quint8 type_value;
-
-    QDataStream stream(bytes); //QIODevice::ReadOnly defolt
+    quint8 type_value = 0;
+    QDataStream stream(bytes);
     stream.setVersion(QDataStream::Qt_6_0);
-
     stream >> type_value;
-    packet.type = static_cast<MessageType>(type_value);
     stream >> packet.timestamp;
     stream >> packet.data;
 
@@ -68,9 +123,10 @@ DataPacket Messenger_Core::deserialize_packet(const QByteArray &bytes){
     } else {
         packet.type = static_cast<MessageType>(type_value);
     }
-
     return packet;
 }
+
+// ── incoming data ────────────────────────────────────────────────────────────
 
 void Messenger_Core::handle_data_received(const QByteArray &data)
 {
@@ -78,8 +134,10 @@ void Messenger_Core::handle_data_received(const QByteArray &data)
 
     QByteArray decrypted = data;
 
-    if (m_crypto->is_ready()) {
-        decrypted = m_crypto->decrypt(data);
+    Crypto_Manager *crypto = crypto_for(m_pending_peer);
+
+    if (crypto->is_ready()) {
+        decrypted = crypto->decrypt(data);
         if (decrypted.isEmpty()) {
             qWarning() << "Decryption failed — dropping packet";
             return;
@@ -97,8 +155,9 @@ void Messenger_Core::handle_data_received(const QByteArray &data)
     }
 }
 
-void Messenger_Core::setup_handlers(){
-    m_handlers[MessageType::ChatMessage] = [this](const DataPacket &packet){
+void Messenger_Core::setup_handlers()
+{
+    m_handlers[MessageType::ChatMessage] = [this](const DataPacket &packet) {
         QDataStream stream(packet.data);
         QString sender_name;
         QString message_text;
@@ -121,8 +180,9 @@ void Messenger_Core::setup_handlers(){
 
         emit message_received(sender_name, message_text);
     };
-    // add new type
 }
+
+// ── send ─────────────────────────────────────────────────────────────────────
 
 void Messenger_Core::send_message(const QString &username, const QString &text)
 {
@@ -139,20 +199,20 @@ void Messenger_Core::send_message(const QString &username, const QString &text)
 
     QByteArray bytes = serialize_packet(packet);
 
-    if (m_crypto->is_ready()) {
-        bytes = m_crypto->encrypt(bytes);
+    Crypto_Manager *crypto = crypto_for(m_pending_peer);
+    if (crypto->is_ready()) {
+        bytes = crypto->encrypt(bytes);
     } else {
         qWarning() << "Sending unencrypted — key exchange not done";
     }
 
     if (m_relay_mode) {
         if (m_pending_peer.isEmpty()) {
-            qWarning() << "Relay mode but no pending peer set";
-            m_local_db->enqueue_message(m_pending_peer, bytes); // в очередь
-        } else {
-            m_bootstrap->store_message(m_pending_peer, bytes);
-            qDebug() << "Message sent via relay to:" << m_pending_peer;
+            qWarning() << "Relay mode but no pending peer set — message dropped";
+            return;
         }
+        m_bootstrap->store_message(m_pending_peer, bytes);
+        qDebug() << "Message sent via relay to:" << m_pending_peer;
     } else if (m_network->has_connections()) {
         m_network->send_data(bytes);
     } else {
@@ -164,62 +224,50 @@ void Messenger_Core::send_message(const QString &username, const QString &text)
                              username,
                              text,
                              packet.timestamp,
-                             true);
+                             true); // исходящее
 
     emit message_received(username, text);
 }
 
-bool Messenger_Core::start_server(quint16 port) {
+// ── network ──────────────────────────────────────────────────────────────────
+
+bool Messenger_Core::start_server(quint16 port)
+{
     if (m_listening_port != 0) return true;
     bool ok = m_network->start_server(port);
     if (ok) m_listening_port = m_network->listening_port();
     return ok;
 }
 
-void Messenger_Core::connect_to_host(const QString &host, quint16 port){
-    m_network->connect_to_host(host, port);
+void Messenger_Core::connect_to_host(const QString &host, quint16 port)
+{
+    Crypto_Manager *crypto = crypto_for(m_pending_peer);
+    m_network->connect_to_host(host, port, crypto->public_key());
 }
 
-bool Messenger_Core::connect_to_database(const QString &host, int port,
-                                       const QString &dbName,
-                                       const QString &user,
-                                       const QString &password)
+// ── auth ─────────────────────────────────────────────────────────────────────
+
+void Messenger_Core::auth_register(const QString &nickname, const QString &password)
 {
-    return m_db->connect(host, port, dbName, user, password);
+    m_bootstrap->auth_register(nickname, password);
 }
 
-bool Messenger_Core::register_user(const QString &nickname, const QString &passwordHash)
+void Messenger_Core::auth_login(const QString &nickname, const QString &password)
 {
-    return m_db->registerUser(nickname, passwordHash);
+    m_bootstrap->auth_login(nickname, password);
 }
 
-bool Messenger_Core::login_user(const QString &nickname, const QString &passwordHash)
+void Messenger_Core::auth_verify(const QString &token)
 {
-    if (!m_db->validateUser(nickname, passwordHash))
-        return false;
-    m_db->updateLastSeen(nickname);
-    return true;
+    m_bootstrap->auth_verify(token);
 }
 
-void Messenger_Core::create_session(const QString &nickname, const QString &token)
+void Messenger_Core::auth_logout(const QString &token)
 {
-    m_db->createSession(nickname, "0.0.0.0", token);
+    m_bootstrap->auth_logout(token);
 }
 
-bool Messenger_Core::session_exists(const QString &token)
-{
-    return m_db->sessionExists(token);
-}
-
-void Messenger_Core::remove_session(const QString &token)
-{
-    m_db->removeSession(token);
-}
-
-void Messenger_Core::update_last_seen(const QString &nickname)
-{
-    m_db->updateLastSeen(nickname);
-}
+// ── bootstrap ────────────────────────────────────────────────────────────────
 
 void Messenger_Core::register_on_bootstrap(const QString &nickname)
 {
@@ -227,9 +275,8 @@ void Messenger_Core::register_on_bootstrap(const QString &nickname)
         qWarning() << "Cannot register: server not started yet";
         return;
     }
-    m_bootstrap->register_user(nickname,
-                               m_listening_port,
-                               m_crypto->public_key());
+    Crypto_Manager *crypto = crypto_for(nickname);
+    m_bootstrap->register_user(nickname, m_listening_port, crypto->public_key());
 }
 
 void Messenger_Core::find_peer(const QString &nickname)
@@ -242,15 +289,22 @@ void Messenger_Core::unregister_from_bootstrap(const QString &nickname)
     m_bootstrap->unregister_user(nickname);
 }
 
+// ── peer found ───────────────────────────────────────────────────────────────
+
 void Messenger_Core::on_peer_found(const QString &nickname,
                                    const QString &host,
                                    quint16 port,
                                    const QByteArray &peer_public_key)
 {
     m_pending_peer = nickname;
-    m_relay_mode   = false;
 
-    if (!m_crypto->compute_shared_secret(peer_public_key)) {
+    m_peer_state[nickname].relay_mode = false;
+    m_relay_mode = false;
+
+    Crypto_Manager *crypto = crypto_for(nickname);
+    crypto->set_server_mode(false);
+
+    if (!crypto->compute_shared_secret(peer_public_key)) {
         qWarning() << "Key exchange failed with peer:" << nickname;
         return;
     }
@@ -262,19 +316,23 @@ void Messenger_Core::on_peer_found(const QString &nickname,
         }
     }
 
+    m_network->connect_to_host(host, port, crypto->public_key());
+
     qDebug() << "Key exchange OK, connecting to" << host << port;
     emit peer_found(nickname, host, port);
 }
 
 void Messenger_Core::on_p2p_failed()
 {
-    qDebug() << "P2P failed — switching to relay mode";
-    m_relay_mode = true;
+    qDebug() << "P2P failed for" << m_pending_peer << "— switching to relay";
+    m_peer_state[m_pending_peer].relay_mode = true;
+    m_relay_mode = true; // кэш
 
     m_poll_timer->start(Config::RELAY_POLL_INTERVAL_MS);
-
     emit relay_mode_activated();
 }
+
+// ── relay poll ───────────────────────────────────────────────────────────────
 
 void Messenger_Core::poll_relay_messages()
 {
@@ -282,10 +340,11 @@ void Messenger_Core::poll_relay_messages()
     m_bootstrap->fetch_messages(m_current_nickname);
 }
 
+// ── misc ─────────────────────────────────────────────────────────────────────
+
 void Messenger_Core::set_current_nickname(const QString &nickname)
 {
     m_current_nickname = nickname;
-
     if (!m_local_db->init(nickname))
         qWarning() << "Local_DB init failed for:" << nickname;
 }
@@ -295,4 +354,7 @@ QList<Message_Record> Messenger_Core::load_history(const QString &peer, int limi
     return m_local_db->load_history(peer, limit);
 }
 
-quint16 Messenger_Core::get_listening_port() const { return m_listening_port; }
+quint16 Messenger_Core::get_listening_port() const
+{
+    return m_listening_port;
+}

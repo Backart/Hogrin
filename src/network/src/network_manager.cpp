@@ -4,7 +4,6 @@ Network_Manager::Network_Manager(QObject *parent)
     : QObject(parent)
     , m_server(new QTcpServer(this))
 {
-
     // Server connection
     connect(m_server, &QTcpServer::newConnection, this, &Network_Manager::handle_new_connection);
 
@@ -20,8 +19,9 @@ bool Network_Manager::start_server(quint16 port){
     return false;
 }
 
-void Network_Manager::connect_to_host(const QString &host, quint16 port)
+void Network_Manager::connect_to_host(const QString &host, quint16 port, const QByteArray &my_pub_key)
 {
+    disconnect_from_host();
     qDebug() << "Connecting to" << host << ":" << port;
     QTcpSocket *socket = new QTcpSocket();
     Tcp_Connection *connection = new Tcp_Connection(socket, this);
@@ -30,10 +30,12 @@ void Network_Manager::connect_to_host(const QString &host, quint16 port)
     QTimer *timeout = new QTimer(this);
     timeout->setSingleShot(true);
 
-    connect(socket, &QTcpSocket::connected, this, [this, connection, timeout](){
+    connect(socket, &QTcpSocket::connected, this, [this, connection, timeout, my_pub_key](){
         timeout->stop();
         timeout->deleteLater();
-        connection->sendMessage(QByteArray(Config::HANDSHAKE_TOKEN));
+        QByteArray payload = QByteArray(Config::HANDSHAKE_TOKEN) + ":" + my_pub_key.toHex();
+        connection->sendMessage(payload);
+
         emit connected();
     });
 
@@ -68,20 +70,23 @@ void Network_Manager::handle_new_connection(){
         QTcpSocket *socket = m_server->nextPendingConnection();
         Tcp_Connection *connection = new Tcp_Connection(socket, this);
 
-        // Ждём handshake токен — первые данные должны быть токеном
         connect(connection, &Tcp_Connection::dataReceived, this, [this, connection](const QByteArray &data){
             if (!connection->property("authenticated").toBool()) {
-                qDebug() << "Handshake received, size:" << data.size() << "data:" << data.trimmed();
-                qDebug() << "Expected token:" << QByteArray(Config::HANDSHAKE_TOKEN);
-                if (data.trimmed() == QByteArray(Config::HANDSHAKE_TOKEN)) {
+                QByteArray expected_token = QByteArray(Config::HANDSHAKE_TOKEN);
+
+                if (data.startsWith(expected_token + ":")) {
+                    QByteArray peer_hex = data.mid(expected_token.size() + 1).trimmed();
+                    QByteArray peer_pub_key = QByteArray::fromHex(peer_hex);
+
                     connection->setProperty("authenticated", true);
-                    qDebug() << "Client authenticated successfully";
+                    qDebug() << "Client authenticated successfully. Peer key received.";
+
+                    emit incoming_peer_authenticated(peer_pub_key);
                     emit connected();
                 } else {
-                    qDebug() << "Invalid handshake token — dropping connection";
+                    qDebug() << "Invalid handshake — dropping connection";
                     connection->deleteLater();
                     m_connections.removeAll(connection);
-                    return;
                 }
             } else {
                 handle_data_received(data);

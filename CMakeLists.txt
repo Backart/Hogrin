@@ -47,8 +47,6 @@ qt_add_executable(appHogrin
     src/common/config.h
     src/crypto/include/crypto_manager.h
     src/crypto/src/crypto_manager.cpp
-    src/db/include/db_manager.h
-    src/db/src/db_manager.cpp
     src/db/include/local_db.h
     src/db/src/local_db.cpp
 )

@@ -16,7 +16,9 @@ public:
     explicit Network_Manager(QObject *parent = nullptr);
 
     // Управление
-    void connect_to_host(const QString &host, quint16 port);
+    void connect_to_host(const QString &host,
+                         quint16 port,
+                         const QByteArray &my_pub_key);
     bool start_server(quint16 port);
     void disconnect_from_host();
 
@@ -33,6 +35,7 @@ signals:
     void data_received(const QByteArray &data);
 
     void p2p_failed();
+    void incoming_peer_authenticated(const QByteArray &peer_pub_key);
 
 private slots:
     // Внутренние слоты

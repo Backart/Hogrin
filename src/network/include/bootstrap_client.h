@@ -14,8 +14,17 @@ public:
     void find_user(const QString &nickname);
     void unregister_user(const QString &nickname);
 
-    void store_message(const QString &nickname, const QByteArray &encrypted_blob);
+    void store_message(const QString &nickname,
+                       const QByteArray &encrypted_blob);
     void fetch_messages(const QString &nickname);
+
+    void auth_logout(const QString &token);
+    void auth_verify(const QString &token);
+    void auth_login(const QString &nickname,
+                    const QString &password);
+    void auth_register(const QString &nickname,
+                       const QString &password);
+
 
 signals:
     void user_not_found(const QString &nickname);
@@ -28,9 +37,22 @@ signals:
     void store_confirmed();
     void store_failed(const QString &reason);
 
+    void auth_register_success();
+    void auth_register_failed(const QString &reason);
+
+    void auth_login_success(const QString &token, const QString &nickname);
+    void auth_login_failed(const QString &reason);
+
+    void auth_verify_success(const QString &nickname);
+    void auth_verify_failed(const QString &reason);
+
+    void auth_logout_success();
+
 private:
     QTcpSocket *m_socket;
     void connect_and_send(const QString &message);
+    QString m_pending_find_nickname;
+    QString m_pending_auth_nickname;
 };
 
 #endif // BOOTSTRAP_CLIENT_H

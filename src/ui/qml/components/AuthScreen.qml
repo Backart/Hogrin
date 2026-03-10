@@ -10,6 +10,35 @@ Rectangle {
 
     property bool isLoginMode: true
     property string errorText: ""
+    property bool isLoading: false
+
+    // ── Асинхронні обробники авторизації ──
+    Connections {
+        target: backend
+
+        function onLogin_result(success, error) {
+            authRoot.isLoading = false
+            if (success) {
+                authRoot.errorText = ""
+                backend.start_server(0)
+                authRoot.authSuccess(nicknameInput.text.trim())
+            } else {
+                authRoot.errorText = error === "invalid"
+                    ? "Invalid nickname or password" : error
+            }
+        }
+
+        function onRegister_result(success, error) {
+            if (success) {
+                authRoot.errorText = ""
+                backend.login_user(nicknameInput.text.trim(), passwordInput.text)
+            } else {
+                authRoot.isLoading = false
+                authRoot.errorText = error === "already_exists"
+                    ? "Nickname already taken" : error
+            }
+        }
+    }
 
     // Background accent glow
     Rectangle {
@@ -87,10 +116,7 @@ Rectangle {
 
             ColumnLayout {
                 id: formLayout
-                anchors {
-                    fill: parent
-                    margins: 20
-                }
+                anchors { fill: parent; margins: 20 }
                 spacing: 12
 
                 // Nickname field
@@ -124,6 +150,7 @@ Rectangle {
                             font.pixelSize: 14
                             color: theme.text
                             clip: true
+                            enabled: !authRoot.isLoading
 
                             Text {
                                 anchors.fill: parent
@@ -171,6 +198,7 @@ Rectangle {
                             color: theme.text
                             clip: true
                             echoMode: TextInput.Password
+                            enabled: !authRoot.isLoading
 
                             Text {
                                 anchors.fill: parent
@@ -206,7 +234,9 @@ Rectangle {
                     color: submitArea.containsMouse ? theme.accentHover : theme.accent
                     Behavior on color { ColorAnimation { duration: 120 } }
 
-                    scale: submitArea.containsMouse ? 1.02 : 1.0
+                    opacity: authRoot.isLoading ? 0.5 : 1.0
+
+                    scale: submitArea.containsMouse && !authRoot.isLoading ? 1.02 : 1.0
                     Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutBack } }
 
                     Rectangle {
@@ -220,7 +250,7 @@ Rectangle {
 
                     Text {
                         anchors.centerIn: parent
-                        text: isLoginMode ? "Sign In" : "Create Account"
+                        text: authRoot.isLoading ? "Please wait..." : (isLoginMode ? "Sign In" : "Create Account")
                         font.pixelSize: 14
                         font.weight: Font.SemiBold
                         color: "#FFFFFF"
@@ -231,6 +261,7 @@ Rectangle {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
+                        enabled: !authRoot.isLoading
                         onClicked: submitAuth()
                     }
                 }
@@ -243,6 +274,7 @@ Rectangle {
         Row {
             Layout.alignment: Qt.AlignHCenter
             spacing: 6
+            opacity: authRoot.isLoading ? 0.5 : 1.0
 
             Text {
                 text: isLoginMode ? "Don't have an account?" : "Already have an account?"
@@ -261,6 +293,7 @@ Rectangle {
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
+                    enabled: !authRoot.isLoading
                     onClicked: {
                         isLoginMode = !isLoginMode
                         authRoot.errorText = ""
@@ -291,19 +324,13 @@ Rectangle {
             return
         }
 
-        let success = false
-        if (isLoginMode) {
-            success = backend.login_user(nick, pass)
-            if (!success) authRoot.errorText = "Invalid nickname or password"
-        } else {
-            success = backend.register_user(nick, pass)
-            if (!success) authRoot.errorText = "Nickname already taken"
-        }
+        authRoot.isLoading = true
+        authRoot.errorText = ""
 
-        if (success) {
-            authRoot.errorText = ""
-            backend.start_server(0)
-            authRoot.authSuccess(nick)
+        if (isLoginMode) {
+            backend.login_user(nick, pass)
+        } else {
+            backend.register_user(nick, pass)
         }
     }
 }
