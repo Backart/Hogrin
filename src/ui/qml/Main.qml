@@ -24,6 +24,26 @@ Window {
     Style { id: theme }
     ListModel { id: chatModel }
 
+    onActiveChatUserChanged: {
+        chatModel.clear()
+
+        if (activeChatUser === "") return;
+
+        let history = backend.load_history(activeChatUser, 100);
+
+        for (let i = 0; i < history.length; ++i) {
+            let msg = history[i];
+            let date = new Date(msg.timestamp * 1000);
+
+            chatModel.append({
+                                 "senderName":  msg.sender,
+                                 "messageText": msg.text,
+                                 "isMe":        Boolean(msg.is_outgoing),
+                                 "msgTime":     Qt.formatDateTime(date, "hh:mm")
+                             });
+        }
+    }
+
     Component.onCompleted: {
         backend.check_saved_session()
     }
@@ -37,6 +57,8 @@ Window {
             root.isAuthenticated = true
             backend.start_server(0)
             backend.register_on_bootstrap(nickname)
+            sidebar.loadSavedContacts()
+            sidebarOverlay.loadSavedContacts()
         }
     }
 
@@ -44,12 +66,15 @@ Window {
         target: backend
         function onMessage_received(username, text, time) {
             if (username === root.currentUsername) return
-            chatModel.append({
-                "senderName":  username,
-                "messageText": text,
-                "isMe":        false,
-                "msgTime":     Qt.formatDateTime(time, "hh:mm")
-            })
+
+            if (username === root.activeChatUser) {
+                chatModel.append({
+                                     "senderName":  username,
+                                     "messageText": text,
+                                     "isMe":        false,
+                                     "msgTime":     Qt.formatDateTime(time, "hh:mm")
+                                 })
+            }
         }
     }
 
@@ -64,6 +89,8 @@ Window {
             root.loggedInUser = username
             root.isAuthenticated = true
             backend.register_on_bootstrap(username)
+            sidebar.loadSavedContacts()
+            sidebarOverlay.loadSavedContacts()
         }
     }
 

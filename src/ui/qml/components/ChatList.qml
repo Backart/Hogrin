@@ -9,6 +9,18 @@ Rectangle {
     property alias username: myUsernameField.text
     property bool  showSettings: false
 
+    function loadSavedContacts() {
+        contactsModel.clear()
+        let peers = backend.get_recent_chats()
+
+        for (let i = 0; i < peers.length; ++i) {
+            contactsModel.append({
+                                     "nickname": peers[i],
+                                     "isOnline": false
+                                 })
+        }
+    }
+
     MouseArea {
         anchors.fill: parent
         z: -1
@@ -90,18 +102,30 @@ Rectangle {
                     target: backend
 
                     function onPeer_found(host, port) {
-                        let foundName = searchField.text.trim() || "Unknown"
+                        let foundName = searchField.text.trim() || root.activeChatUser
 
-                        contactsModel.append({
-                            "nickname": foundName,
-                            "isOnline": true
-                        })
+                        let exists = false;
+                        for (let i = 0; i < contactsModel.count; ++i) {
+                            if (contactsModel.get(i).nickname === foundName) {
+                                contactsModel.setProperty(i, "isOnline", true)
+                                exists = true;
+                                break;
+                            }
+                        }
+
+                        if (!exists) {
+                            contactsModel.append({
+                                                     "nickname": foundName,
+                                                     "isOnline": true
+                                                 })
+                        }
 
                         root.activeChatUser = foundName
                         searchToast.statusText = ""
                     }
 
                     function onPeer_not_found() {
+                        contactsModel.clear()
                         searchToast.searchSuccess = false
                         searchToast.statusText = "Not found"
                     }
@@ -119,7 +143,6 @@ Rectangle {
 
                         RowLayout {
                             anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
-                            spacing: 8
 
                             Rectangle {
                                 Layout.fillWidth: true
@@ -145,10 +168,28 @@ Rectangle {
                                         color: theme.text
                                         clip: true
 
+                                        Timer {
+                                            id: searchDebounce
+                                            interval: 500
+                                            repeat: false
+                                            onTriggered: {
+                                                let t = searchField.text.trim()
+                                                if (t.length >= 3) {
+                                                    searchToast.searchSuccess = false
+                                                    searchToast.statusText = "Searching..."
+                                                    backend.find_peer(t)
+                                                }
+                                            }
+                                        }
+
                                         onTextChanged: {
-                                            if (text.length === 0) {
-                                                contactsModel.clear()
+                                            let t = text.trim()
+                                            if (t.length === 0) {
+                                                searchDebounce.stop()
+                                                loadSavedContacts()
                                                 searchToast.statusText = ""
+                                            } else {
+                                                searchDebounce.restart()
                                             }
                                         }
 
@@ -160,40 +201,23 @@ Rectangle {
                                             visible: searchField.text.length === 0
                                             verticalAlignment: Text.AlignVCenter
                                         }
+
                                         Keys.onReturnPressed: {
-                                            if (searchField.text.trim().length > 0) {
+                                            let t = searchField.text.trim()
+                                            if (t.length > 0) {
+                                                searchDebounce.stop()
                                                 searchToast.searchSuccess = false
                                                 searchToast.statusText = "Searching..."
-                                                backend.find_peer(searchField.text.trim())
+                                                backend.find_peer(t)
                                             }
-                                        }
-                                    }
-                                }
-                            }
-
-                            Rectangle {
-                                width: 36; height: 36
-                                radius: width / 2
-                                color: searchArea.containsMouse ? theme.accentHover : theme.accent
-                                opacity: searchField.text.length > 0 ? 1.0 : 0.4
-                                Behavior on opacity { NumberAnimation { duration: 150 } }
-                                Text { anchors.centerIn: parent; text: "→"; font.pixelSize: 16; color: "#FFFFFF" }
-                                MouseArea {
-                                    id: searchArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (searchField.text.trim().length > 0) {
-                                            searchToast.searchSuccess = false
-                                            searchToast.statusText = "Searching..."
-                                            backend.find_peer(searchField.text.trim())
                                         }
                                     }
                                 }
                             }
                         }
                     }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
 
@@ -248,7 +272,7 @@ Rectangle {
                         }
 
                         delegate: ItemDelegate {
-                            width: parent.width
+                            width: ListView.view ? ListView.view.width : 0
                             height: 60
 
                             background: Rectangle {
@@ -297,6 +321,7 @@ Rectangle {
 
                             onClicked: {
                                 root.activeChatUser = model.nickname
+                                backend.find_peer(model.nickname)
                             }
                         }
                     }

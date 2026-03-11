@@ -49,6 +49,7 @@ public:
     void set_current_nickname(const QString &nickname);
 
     QList<Message_Record> load_history(const QString &peer, int limit = 100);
+    QStringList get_recent_chats() const;
 
     quint16 get_listening_port() const;
 
@@ -101,6 +102,9 @@ private:
 
     QMap<QString, Crypto_Manager *> m_crypto_map;
     QMap<QString, PeerState> m_peer_state;
+
+    QList<QByteArray> m_undecryptable_messages;
+    void try_decrypt_pending();
 
 };
 

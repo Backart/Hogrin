@@ -7,12 +7,12 @@
 #include <QSqlDatabase>
 #include <QDateTime>
 #include <QList>
+#include <QDebug>
+#include <QMetaType>
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QStandardPaths>
 #include <QDir>
-#include <QDebug>
-#include <QMetaType>
 
 struct Message_Record {
     int      id;
@@ -52,6 +52,8 @@ public:
     bool has_pending(const QString &peer) const;
 
     bool mark_delivered(int message_id);
+
+    QStringList get_recent_chats() const;
 
 private:
     QSqlDatabase m_db;

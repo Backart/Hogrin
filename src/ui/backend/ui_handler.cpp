@@ -121,9 +121,29 @@ void UI_Handler::find_peer(const QString &nickname)
     m_core->find_peer(nickname);
 }
 
-QList<Message_Record> UI_Handler::load_history(const QString &peer, int limit)
+// ui_handler.cpp
+QVariantList UI_Handler::load_history(const QString &peer, int limit)
 {
-    return m_core->load_history(peer, limit);
+    QVariantList result;
+    for (const Message_Record &msg : m_core->load_history(peer, limit)) {
+        QVariantMap map;
+        map["id"]           = msg.id;
+        map["peer"]         = msg.peer;
+        map["sender"]       = msg.sender;
+        map["text"]         = msg.text;
+        map["timestamp"]    = msg.timestamp;
+        map["is_outgoing"]  = msg.is_outgoing;
+        map["is_delivered"] = msg.is_delivered;
+        result.append(map);
+    }
+    return result;
+}
+
+QStringList UI_Handler::get_recent_chats()
+{
+    // Вызываем метод из ядра, который сделает SQL-запрос к БД.
+    // Если в m_core его еще нет, тебе нужно будет его там написать!
+    return m_core->get_recent_chats();
 }
 
 quint16 UI_Handler::get_listening_port() const

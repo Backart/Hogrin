@@ -20,10 +20,24 @@ Messenger_Core::Messenger_Core(QObject *parent)
                 Crypto_Manager *peer_crypto = crypto_for(peer_nickname);
                 peer_crypto->set_server_mode(true);
                 peer_crypto->set_identity(*m_identity_crypto);
-                if (!peer_crypto->compute_shared_secret(peer_pub_key))
+                if (!peer_crypto->compute_shared_secret(peer_pub_key)) {
                     qWarning() << "Failed to compute shared secret for:" << peer_nickname;
-                else
+                } else {
                     qDebug() << "Shared secret computed for incoming P2P from:" << peer_nickname;
+
+                    m_peer_state[peer_nickname].relay_mode = false;
+                    try_decrypt_pending();
+
+                    if (m_local_db->has_pending(peer_nickname)) {
+                        const QList<QByteArray> pending = m_local_db->peek_outbox(peer_nickname);
+                        for (const QByteArray &blob : pending) {
+                            QByteArray encrypted = peer_crypto->encrypt(blob);
+                            m_network->send_data(encrypted);
+                        }
+                        m_local_db->confirm_outbox(peer_nickname);
+                        qDebug() << "Flushed pending outbox to incoming peer:" << peer_nickname;
+                    }
+                }
             });
 
     connect(m_bootstrap, &Bootstrap_Client::user_found,
@@ -56,6 +70,7 @@ Messenger_Core::Messenger_Core(QObject *parent)
     connect(m_bootstrap, &Bootstrap_Client::auth_login_success,
             this, [this](const QString &token, const QString &nickname) {
                 set_current_nickname(nickname);
+                m_poll_timer->start(1000);
                 emit login_completed(true, "", token, nickname);
             });
 
@@ -67,6 +82,7 @@ Messenger_Core::Messenger_Core(QObject *parent)
     connect(m_bootstrap, &Bootstrap_Client::auth_verify_success,
             this, [this](const QString &nickname) {
                 set_current_nickname(nickname);
+                m_poll_timer->start(1000);
                 emit verify_completed(true, nickname);
             });
 
@@ -148,26 +164,27 @@ void Messenger_Core::handle_data_received(const QByteArray &data)
 {
     if (data.isEmpty()) return;
 
-    QByteArray decrypted = data;
+    QByteArray decrypted;
 
-    Crypto_Manager *crypto = crypto_for(m_pending_peer);
-
-    if (crypto->is_ready()) {
-        decrypted = crypto->decrypt(data);
-        if (decrypted.isEmpty()) {
-            qWarning() << "Decryption failed — dropping packet";
-            return;
+    for (auto it = m_crypto_map.begin(); it != m_crypto_map.end(); ++it) {
+        if (it.value()->is_ready()) {
+            decrypted = it.value()->decrypt(data);
+            if (!decrypted.isEmpty()) break; // Успех!
         }
     }
 
-    DataPacket packet = deserialize_packet(decrypted);
+    if (decrypted.isEmpty()) {
+        qWarning() << "Decryption failed (no matching key yet) — saving to undecryptable queue";
+        m_undecryptable_messages.append(data);
+        return;
+    }
 
+    DataPacket packet = deserialize_packet(decrypted);
     auto it = m_handlers.find(packet.type);
     if (it != m_handlers.end()) {
         it->second(packet);
     } else {
-        qDebug() << "Warning: No handler for packet type:"
-                 << static_cast<quint8>(packet.type);
+        qDebug() << "Warning: No handler for packet type:" << static_cast<quint8>(packet.type);
     }
 }
 
@@ -204,6 +221,11 @@ void Messenger_Core::send_message(const QString &username, const QString &text)
 {
     if (text.isEmpty()) return;
 
+    if (m_pending_peer.isEmpty()) {
+        qWarning() << "Message dropped: No pending peer set!";
+        return;
+    }
+
     QByteArray payload;
     QDataStream stream(&payload, QIODevice::WriteOnly);
     stream << username << text;
@@ -216,24 +238,22 @@ void Messenger_Core::send_message(const QString &username, const QString &text)
     QByteArray bytes = serialize_packet(packet);
 
     Crypto_Manager *crypto = crypto_for(m_pending_peer);
-    if (crypto->is_ready()) {
-        bytes = crypto->encrypt(bytes);
-    } else {
-        qWarning() << "Sending unencrypted — key exchange not done";
-    }
 
-    if (m_relay_mode) {
-        if (m_pending_peer.isEmpty()) {
-            qWarning() << "Relay mode but no pending peer set — message dropped";
-            return;
-        }
-        m_bootstrap->store_message(m_pending_peer, bytes);
-        qDebug() << "Message sent via relay to:" << m_pending_peer;
-    } else if (m_network->has_connections()) {
-        m_network->send_data(bytes);
-    } else {
-        qDebug() << "No connection — queuing message for:" << m_pending_peer;
+    if (!crypto->is_ready()) {
+        qWarning() << "Key exchange not done — queuing message for:" << m_pending_peer;
         m_local_db->enqueue_message(m_pending_peer, bytes);
+    } else {
+        QByteArray encrypted = crypto->encrypt(bytes);
+
+        if (m_peer_state[m_pending_peer].relay_mode) {
+            m_bootstrap->store_message(m_pending_peer, encrypted);
+            qDebug() << "Message sent via relay to:" << m_pending_peer;
+        } else if (m_network->has_connections()) {
+            m_network->send_data(encrypted);
+        } else {
+            qDebug() << "No connection — queuing message for:" << m_pending_peer;
+            m_local_db->enqueue_message(m_pending_peer, bytes); // В очередь всегда ложим до шифрования
+        }
     }
 
     m_local_db->save_message(m_pending_peer,
@@ -319,25 +339,23 @@ void Messenger_Core::on_peer_found(const QString &nickname,
     Crypto_Manager *crypto = crypto_for(nickname);
     crypto->set_server_mode(false);
 
-    // Фикс #3: ключи вычисляем ПОСЛЕ TCP connect, не до
-    connect(m_network, &Network_Manager::connected,
-            this, [this, peer_public_key, nickname]() {
-                Crypto_Manager *peer_crypto = crypto_for(nickname);
-                peer_crypto->set_server_mode(false);
-                // копируем identity ключи в peer_crypto перед вычислением
-                peer_crypto->set_identity(*m_identity_crypto);
-                if (!peer_crypto->compute_shared_secret(peer_public_key))
-                    qWarning() << "Key exchange failed:" << nickname;
-            }, Qt::SingleShotConnection);
+    crypto->set_identity(*m_identity_crypto);
+    if (!crypto->compute_shared_secret(peer_public_key)) {
+        qWarning() << "Failed to compute shared secret for:" << nickname;
+    } else {
+        qDebug() << "Shared secret computed immediately for:" << nickname;
+        try_decrypt_pending();
+    }
 
-    // Фикс #5: confirm только после подтверждения от сервера
     if (m_local_db->has_pending(nickname)) {
         const QList<QByteArray> pending = m_local_db->peek_outbox(nickname);
         for (const QByteArray &blob : pending) {
-            QByteArray encrypted = crypto->is_ready()
-            ? crypto->encrypt(blob)
-            : blob;
-            m_bootstrap->store_message(nickname, encrypted);
+            if (crypto->is_ready()) {
+                QByteArray encrypted = crypto->encrypt(blob);
+                m_bootstrap->store_message(nickname, encrypted);
+            } else {
+                qWarning() << "Cannot send pending message: crypto is not ready!";
+            }
         }
 
         connect(m_bootstrap, &Bootstrap_Client::store_confirmed,
@@ -392,7 +410,38 @@ QList<Message_Record> Messenger_Core::load_history(const QString &peer, int limi
     return m_local_db->load_history(peer, limit);
 }
 
+QStringList Messenger_Core::get_recent_chats() const
+{
+    return m_local_db->get_recent_chats();
+}
+
 quint16 Messenger_Core::get_listening_port() const
 {
     return m_listening_port;
+}
+
+void Messenger_Core::try_decrypt_pending()
+{
+    if (m_undecryptable_messages.isEmpty()) return;
+
+    QList<QByteArray> remaining;
+    for (const QByteArray &data : m_undecryptable_messages) {
+        QByteArray decrypted;
+
+        for (auto it = m_crypto_map.begin(); it != m_crypto_map.end(); ++it) {
+            if (it.value()->is_ready()) {
+                decrypted = it.value()->decrypt(data);
+                if (!decrypted.isEmpty()) break;
+            }
+        }
+
+        if (!decrypted.isEmpty()) {
+            DataPacket packet = deserialize_packet(decrypted);
+            auto handler_it = m_handlers.find(packet.type);
+            if (handler_it != m_handlers.end()) handler_it->second(packet);
+        } else {
+            remaining.append(data);
+        }
+    }
+    m_undecryptable_messages = remaining;
 }

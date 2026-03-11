@@ -1,9 +1,4 @@
 #include "local_db.h"
-#include <QSqlQuery>
-#include <QSqlError>
-#include <QStandardPaths>
-#include <QDir>
-#include <QDebug>
 
 Local_DB::Local_DB(QObject *parent)
     : QObject(parent)
@@ -204,4 +199,29 @@ bool Local_DB::has_pending(const QString &peer) const
     q.exec();
     q.next();
     return q.value(0).toInt() > 0;
+}
+
+QStringList Local_DB::get_recent_chats() const
+{
+    QStringList recent_chats;
+
+    // Проверяем, открыта ли база
+    if (!m_db.isOpen()) {
+        qWarning() << "Database is not open, cannot fetch recent chats.";
+        return recent_chats;
+    }
+
+    QSqlQuery query(m_db);
+    // Достаём уникальные имена собеседников, исключая пустые строки
+    query.prepare("SELECT DISTINCT peer FROM messages WHERE peer != '' ORDER BY timestamp DESC;");
+
+    if (query.exec()) {
+        while (query.next()) {
+            recent_chats.append(query.value(0).toString());
+        }
+    } else {
+        qWarning() << "Failed to fetch recent chats:" << query.lastError().text();
+    }
+
+    return recent_chats;
 }
