@@ -26,6 +26,8 @@ public:
     bool is_ready() const { return m_secret_computed; }
     void set_server_mode(bool is_server) { m_is_server = is_server; }
 
+    void set_identity(const Crypto_Manager &source);
+
 private:
     // Keypair
     unsigned char m_public_key[crypto_kx_PUBLICKEYBYTES];

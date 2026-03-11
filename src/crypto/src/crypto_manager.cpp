@@ -19,9 +19,9 @@ QByteArray Crypto_Manager::public_key() const
 
 bool Crypto_Manager::compute_shared_secret(const QByteArray &peer_public_key)
 {
-    if (peer_public_key.size() != crypto_kx_PUBLICKEYBYTES) {
-        qWarning() << "Crypto_Manager: invalid peer public key size";
-        return false;
+    if (m_secret_computed) {
+        qDebug() << "Crypto_Manager: secret already computed, skipping";
+        return true;
     }
 
     const unsigned char *peer_pk =
@@ -121,10 +121,12 @@ QString Crypto_Manager::hash_password(const QString &password)
 {
     char hash[crypto_pwhash_STRBYTES];
 
+    const QByteArray pw = password.toUtf8();
+
     if (crypto_pwhash_str(
             hash,
-            password.toUtf8().constData(),
-            password.toUtf8().size(),
+            pw.constData(),
+            pw.size(),
             crypto_pwhash_OPSLIMIT_INTERACTIVE,
             crypto_pwhash_MEMLIMIT_INTERACTIVE) != 0)
     {
@@ -137,8 +139,17 @@ QString Crypto_Manager::hash_password(const QString &password)
 
 bool Crypto_Manager::verify_password(const QString &password, const QString &hash)
 {
+    const QByteArray pw   = password.toUtf8();
+    const QByteArray hash_bytes = hash.toUtf8();
     return crypto_pwhash_str_verify(
-               hash.toUtf8().constData(),
-               password.toUtf8().constData(),
-               password.toUtf8().size()) == 0;
+               hash_bytes.constData(),
+               pw.constData(),
+               pw.size()) == 0;
+}
+
+void Crypto_Manager::set_identity(const Crypto_Manager &source)
+{
+    memcpy(m_public_key, source.m_public_key, crypto_kx_PUBLICKEYBYTES);
+    memcpy(m_secret_key, source.m_secret_key, crypto_kx_SECRETKEYBYTES);
+    m_secret_computed = false; // сессионные ключи нужно пересчитать
 }

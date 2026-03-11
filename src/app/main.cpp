@@ -10,6 +10,10 @@ using namespace Qt::StringLiterals;
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+
+    qRegisterMetaType<Message_Record>();
+    qRegisterMetaType<QList<Message_Record>>();
+
     QQmlApplicationEngine engine;
 
     const QUrl url(u"qrc:/qt/qml/Hogrin/src/ui/qml/Main.qml"_s);

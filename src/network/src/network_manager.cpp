@@ -19,46 +19,61 @@ bool Network_Manager::start_server(quint16 port){
     return false;
 }
 
-void Network_Manager::connect_to_host(const QString &host, quint16 port, const QByteArray &my_pub_key)
+void Network_Manager::connect_to_host(const QString &host,
+                                      quint16 port,
+                                      const QByteArray &my_pub_key)
 {
+    if (m_skip_p2p) {
+        qDebug() << "NAT/CGNAT detected — skipping P2P attempt, going relay";
+        emit p2p_failed();
+        return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     disconnect_from_host();
     qDebug() << "Connecting to" << host << ":" << port;
-    QTcpSocket *socket = new QTcpSocket();
+
+    QTcpSocket    *socket     = new QTcpSocket();
     Tcp_Connection *connection = new Tcp_Connection(socket, this);
 
-    // timeout P2P attempt
     QTimer *timeout = new QTimer(this);
     timeout->setSingleShot(true);
 
-    connect(socket, &QTcpSocket::connected, this, [this, connection, timeout, my_pub_key](){
-        timeout->stop();
-        timeout->deleteLater();
-        QByteArray payload = QByteArray(Config::HANDSHAKE_TOKEN) + ":" + my_pub_key.toHex();
-        connection->sendMessage(payload);
+    connect(socket, &QTcpSocket::connected,
+            this, [this, connection, timeout, my_pub_key]() {
+                timeout->stop();
+                timeout->deleteLater();
 
-        emit connected();
-    });
+                QByteArray payload = QByteArray(Config::HANDSHAKE_TOKEN)
+                                     + ":"
+                                     + m_nickname.toUtf8() + ":"
+                                     + my_pub_key.toHex();
+                connection->sendMessage(payload);
 
-    connect(timeout, &QTimer::timeout, this, [this, socket, connection, timeout](){
-        qDebug() << "P2P connection timeout — fallback to relay";
-        timeout->deleteLater();
+                emit connected();
+            });
 
-        // remove connection
-        m_connections.removeAll(connection);
-        connection->deleteLater();
-        socket->abort();
+    connect(timeout, &QTimer::timeout,
+            this, [this, socket, connection, timeout]() {
+                qDebug() << "P2P connection timeout — fallback to relay";
+                timeout->deleteLater();
 
-        emit p2p_failed();
-    });
+                m_connections.removeAll(connection);
+                connection->deleteLater();
+                socket->abort();
+
+                emit p2p_failed();
+            });
 
     connect(connection, &Tcp_Connection::dataReceived,
             this, &Network_Manager::handle_data_received);
 
-    connect(connection, &Tcp_Connection::disconnected, this, [this, connection](){
-        m_connections.removeAll(connection);
-        connection->deleteLater();
-        emit disconnected();
-    });
+    connect(connection, &Tcp_Connection::disconnected,
+            this, [this, connection]() {
+                m_connections.removeAll(connection);
+                connection->deleteLater();
+                emit disconnected();
+            });
 
     m_connections.append(connection);
     socket->connectToHost(host, port);
@@ -75,13 +90,15 @@ void Network_Manager::handle_new_connection(){
                 QByteArray expected_token = QByteArray(Config::HANDSHAKE_TOKEN);
 
                 if (data.startsWith(expected_token + ":")) {
-                    QByteArray peer_hex = data.mid(expected_token.size() + 1).trimmed();
-                    QByteArray peer_pub_key = QByteArray::fromHex(peer_hex);
+                    QByteArray rest = data.mid(expected_token.size() + 1).trimmed();
+                    int sep = rest.indexOf(':');
+                    QString peer_nickname = QString::fromUtf8(rest.left(sep));
+                    QByteArray peer_pub_key = QByteArray::fromHex(rest.mid(sep + 1));
 
                     connection->setProperty("authenticated", true);
                     qDebug() << "Client authenticated successfully. Peer key received.";
 
-                    emit incoming_peer_authenticated(peer_pub_key);
+                    emit incoming_peer_authenticated(peer_nickname, peer_pub_key);
                     emit connected();
                 } else {
                     qDebug() << "Invalid handshake — dropping connection";

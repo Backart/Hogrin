@@ -160,7 +160,7 @@ bool Local_DB::enqueue_message(const QString &peer,
     return true;
 }
 
-QList<QByteArray> Local_DB::dequeue_messages(const QString &peer)
+QList<QByteArray> Local_DB::peek_outbox(const QString &peer)
 {
     QList<QByteArray> result;
     if (!m_ready) return result;
@@ -173,13 +173,25 @@ QList<QByteArray> Local_DB::dequeue_messages(const QString &peer)
     while (q.next())
         result << q.value(0).toByteArray();
 
-    QSqlQuery del(m_db);
-    del.prepare("DELETE FROM outbox WHERE peer = :peer");
-    del.bindValue(":peer", peer);
-    del.exec();
-
-    qDebug() << "Local_DB: dequeued" << result.size() << "messages for:" << peer;
+    qDebug() << "Local_DB: peeked" << result.size() << "pending messages for:" << peer;
     return result;
+}
+
+bool Local_DB::confirm_outbox(const QString &peer)
+{
+    if (!m_ready) return false;
+
+    QSqlQuery q(m_db);
+    q.prepare("DELETE FROM outbox WHERE peer = :peer");
+    q.bindValue(":peer", peer);
+
+    if (!q.exec()) {
+        qWarning() << "Local_DB: confirm_outbox failed:" << q.lastError().text();
+        return false;
+    }
+
+    qDebug() << "Local_DB: outbox confirmed (deleted) for:" << peer;
+    return true;
 }
 
 bool Local_DB::has_pending(const QString &peer) const

@@ -27,6 +27,11 @@ public:
 
     bool has_connections() const;
     quint16 listening_port() const;
+    void set_skip_p2p(bool skip) { m_skip_p2p = skip; }
+
+    void set_nickname(const QString &nickname) { m_nickname = nickname; }
+
+    QString m_nickname;
 
 signals:
     // Сигналы для ядра
@@ -35,7 +40,7 @@ signals:
     void data_received(const QByteArray &data);
 
     void p2p_failed();
-    void incoming_peer_authenticated(const QByteArray &peer_pub_key);
+    void incoming_peer_authenticated(const QString &peer_nickname, const QByteArray &peer_pub_key);
 
 private slots:
     // Внутренние слоты
@@ -52,6 +57,7 @@ private:
     void handle_handshake(Tcp_Connection *connection, const QByteArray &data);
 
     QTimer *m_p2p_timeout_timer;
+    bool m_skip_p2p = false;
 };
 
 #endif

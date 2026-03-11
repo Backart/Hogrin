@@ -14,7 +14,7 @@ public:
     void find_user(const QString &nickname);
     void unregister_user(const QString &nickname);
 
-    void store_message(const QString &nickname,
+    bool store_message(const QString &nickname,
                        const QByteArray &encrypted_blob);
     void fetch_messages(const QString &nickname);
 
@@ -47,6 +47,8 @@ signals:
     void auth_verify_failed(const QString &reason);
 
     void auth_logout_success();
+
+    void registered(const QString &public_ip);
 
 private:
     QTcpSocket *m_socket;

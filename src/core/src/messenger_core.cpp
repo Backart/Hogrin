@@ -16,17 +16,15 @@ Messenger_Core::Messenger_Core(QObject *parent)
             this, &Messenger_Core::on_p2p_failed);
 
     connect(m_network, &Network_Manager::incoming_peer_authenticated,
-            this, [this](const QByteArray &peer_pub_key) {
-
-            Crypto_Manager *crypto = crypto_for(m_pending_peer);
-            crypto->set_server_mode(true);
-
-            if (!crypto->compute_shared_secret(peer_pub_key)) {
-                qWarning() << "Failed to compute shared secret for:" << m_pending_peer;
-            } else {
-                qDebug() << "Shared secret computed for incoming P2P from:" << m_pending_peer;
-            }
-    });
+            this, [this](const QString &peer_nickname, const QByteArray &peer_pub_key) {
+                Crypto_Manager *peer_crypto = crypto_for(peer_nickname);
+                peer_crypto->set_server_mode(true);
+                peer_crypto->set_identity(*m_identity_crypto);
+                if (!peer_crypto->compute_shared_secret(peer_pub_key))
+                    qWarning() << "Failed to compute shared secret for:" << peer_nickname;
+                else
+                    qDebug() << "Shared secret computed for incoming P2P from:" << peer_nickname;
+            });
 
     connect(m_bootstrap, &Bootstrap_Client::user_found,
             this, &Messenger_Core::on_peer_found);
@@ -77,11 +75,29 @@ Messenger_Core::Messenger_Core(QObject *parent)
                 Q_UNUSED(reason)
                 emit verify_completed(false, "");
             });
+
+    connect(m_bootstrap, &Bootstrap_Client::registered,
+            this, [this](const QString &server_seen_ip) {
+                const auto addresses = QNetworkInterface::allAddresses();
+                bool local_match = false;
+                for (const QHostAddress &addr : addresses) {
+                    if (addr.toString() == server_seen_ip) {
+                        local_match = true;
+                        break;
+                    }
+                }
+                if (!local_match) {
+                    qDebug() << "NAT/CGNAT detected: server sees"
+                             << server_seen_ip << "— enabling relay-first mode";
+                    m_network->set_skip_p2p(true);
+                }
+            });
 }
 
 Messenger_Core::~Messenger_Core()
 {
     qDeleteAll(m_crypto_map);
+    delete m_identity_crypto;
 }
 
 Crypto_Manager *Messenger_Core::crypto_for(const QString &peer)
@@ -242,7 +258,7 @@ bool Messenger_Core::start_server(quint16 port)
 void Messenger_Core::connect_to_host(const QString &host, quint16 port)
 {
     Crypto_Manager *crypto = crypto_for(m_pending_peer);
-    m_network->connect_to_host(host, port, crypto->public_key());
+    m_network->connect_to_host(host, port, m_identity_crypto->public_key());
 }
 
 // ── auth ─────────────────────────────────────────────────────────────────────
@@ -276,7 +292,7 @@ void Messenger_Core::register_on_bootstrap(const QString &nickname)
         return;
     }
     Crypto_Manager *crypto = crypto_for(nickname);
-    m_bootstrap->register_user(nickname, m_listening_port, crypto->public_key());
+    m_bootstrap->register_user(nickname, m_listening_port, m_identity_crypto->public_key());
 }
 
 void Messenger_Core::find_peer(const QString &nickname)
@@ -297,28 +313,45 @@ void Messenger_Core::on_peer_found(const QString &nickname,
                                    const QByteArray &peer_public_key)
 {
     m_pending_peer = nickname;
-
     m_peer_state[nickname].relay_mode = false;
     m_relay_mode = false;
 
     Crypto_Manager *crypto = crypto_for(nickname);
     crypto->set_server_mode(false);
 
-    if (!crypto->compute_shared_secret(peer_public_key)) {
-        qWarning() << "Key exchange failed with peer:" << nickname;
-        return;
-    }
+    // Фикс #3: ключи вычисляем ПОСЛЕ TCP connect, не до
+    connect(m_network, &Network_Manager::connected,
+            this, [this, peer_public_key, nickname]() {
+                Crypto_Manager *peer_crypto = crypto_for(nickname);
+                peer_crypto->set_server_mode(false);
+                // копируем identity ключи в peer_crypto перед вычислением
+                peer_crypto->set_identity(*m_identity_crypto);
+                if (!peer_crypto->compute_shared_secret(peer_public_key))
+                    qWarning() << "Key exchange failed:" << nickname;
+            }, Qt::SingleShotConnection);
 
+    // Фикс #5: confirm только после подтверждения от сервера
     if (m_local_db->has_pending(nickname)) {
-        qDebug() << "Retransmitting queued messages to:" << nickname;
-        for (const QByteArray &blob : m_local_db->dequeue_messages(nickname)) {
-            m_bootstrap->store_message(nickname, blob);
+        const QList<QByteArray> pending = m_local_db->peek_outbox(nickname);
+        for (const QByteArray &blob : pending) {
+            QByteArray encrypted = crypto->is_ready()
+            ? crypto->encrypt(blob)
+            : blob;
+            m_bootstrap->store_message(nickname, encrypted);
         }
+
+        connect(m_bootstrap, &Bootstrap_Client::store_confirmed,
+                this, [this, nickname]() {
+                    m_local_db->confirm_outbox(nickname);
+                }, Qt::SingleShotConnection);
+
+        connect(m_bootstrap, &Bootstrap_Client::store_failed,
+                this, [](const QString &reason) {
+                    qWarning() << "Relay store failed, keeping outbox:" << reason;
+                }, Qt::SingleShotConnection);
     }
 
-    m_network->connect_to_host(host, port, crypto->public_key());
-
-    qDebug() << "Key exchange OK, connecting to" << host << port;
+    m_network->connect_to_host(host, port, m_identity_crypto->public_key());
     emit peer_found(nickname, host, port);
 }
 
@@ -345,6 +378,11 @@ void Messenger_Core::poll_relay_messages()
 void Messenger_Core::set_current_nickname(const QString &nickname)
 {
     m_current_nickname = nickname;
+    m_network->set_nickname(nickname);
+
+    if (!m_identity_crypto)
+        m_identity_crypto = new Crypto_Manager();
+
     if (!m_local_db->init(nickname))
         qWarning() << "Local_DB init failed for:" << nickname;
 }

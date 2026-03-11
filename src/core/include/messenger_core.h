@@ -12,6 +12,7 @@
 #include <QDataStream>
 #include <QDebug>
 #include <QMap>
+#include <QNetworkInterface>
 
 #include "../network/include/network_manager.h"
 #include "../common/types.h"
@@ -88,6 +89,8 @@ private:
     DataPacket deserialize_packet(const QByteArray &bytes);
     void       setup_handlers();
     Crypto_Manager *crypto_for(const QString &peer);
+
+    Crypto_Manager *m_identity_crypto = nullptr;
 
     QTimer  *m_poll_timer;
     QString  m_current_nickname;

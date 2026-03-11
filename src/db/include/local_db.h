@@ -7,6 +7,12 @@
 #include <QSqlDatabase>
 #include <QDateTime>
 #include <QList>
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QStandardPaths>
+#include <QDir>
+#include <QDebug>
+#include <QMetaType>
 
 struct Message_Record {
     int      id;
@@ -17,6 +23,8 @@ struct Message_Record {
     bool     is_outgoing;
     bool     is_delivered;
 };
+
+Q_DECLARE_METATYPE(Message_Record)
 
 class Local_DB : public QObject
 {
@@ -38,7 +46,9 @@ public:
                                        int limit = 100) const;
 
     bool enqueue_message(const QString &peer, const QByteArray &encrypted_blob);
-    QList<QByteArray> dequeue_messages(const QString &peer);
+    QList<QByteArray> peek_outbox(const QString &peer);
+    bool              confirm_outbox(const QString &peer);
+
     bool has_pending(const QString &peer) const;
 
     bool mark_delivered(int message_id);

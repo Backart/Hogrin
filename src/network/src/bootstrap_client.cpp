@@ -66,6 +66,10 @@ Bootstrap_Client::Bootstrap_Client(QObject *parent)
                     emit messages_fetched({blob});
                 }
             }
+            else if (response.startsWith("REGISTER_OK:")) {
+                QString public_ip = response.mid(12);
+                emit registered(public_ip);
+            }
         }
     });
 }
@@ -140,12 +144,13 @@ void Bootstrap_Client::unregister_user(const QString &nickname)
     qDebug() << "Unregistering from bootstrap:" << nickname;
 }
 
-void Bootstrap_Client::store_message(const QString &nickname,
+bool Bootstrap_Client::store_message(const QString &nickname,
                                      const QByteArray &encrypted_blob)
 {
     QString hex = QString::fromUtf8(encrypted_blob.toHex());
     connect_and_send(QString("STORE:%1:%2").arg(nickname).arg(hex));
     qDebug() << "Storing relay message for:" << nickname;
+    return true;
 }
 
 void Bootstrap_Client::fetch_messages(const QString &nickname)
