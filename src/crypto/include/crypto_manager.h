@@ -13,6 +13,9 @@ public:
     Crypto_Manager();
 
     QByteArray public_key() const;
+    QByteArray secret_key() const;
+
+    void load_keypair(const QByteArray &pub, const QByteArray &sec);
 
     bool compute_shared_secret(const QByteArray &peer_public_key);
 
@@ -24,7 +27,6 @@ public:
     static bool    verify_password(const QString &password, const QString &hash);
 
     bool is_ready() const { return m_secret_computed; }
-    void set_server_mode(bool is_server) { m_is_server = is_server; }
 
     void set_identity(const Crypto_Manager &source);
 
@@ -38,7 +40,6 @@ private:
     unsigned char m_tx[crypto_kx_SESSIONKEYBYTES];
 
     bool m_secret_computed = false;
-    bool m_is_server       = false;
 };
 
 #endif // CRYPTO_MANAGER_H

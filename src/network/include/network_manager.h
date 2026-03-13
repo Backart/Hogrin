@@ -5,6 +5,8 @@
 #include <QTcpServer>
 #include <QTimer>
 #include <QList>
+#include <QPointer>
+
 #include "tcp_connection.h"
 #include "../common/config.h"
 
@@ -15,14 +17,12 @@ class Network_Manager : public QObject {
 public:
     explicit Network_Manager(QObject *parent = nullptr);
 
-    // Управление
     void connect_to_host(const QString &host,
                          quint16 port,
                          const QByteArray &my_pub_key);
     bool start_server(quint16 port);
     void disconnect_from_host();
 
-    // Отправка
     void send_data(const QByteArray &data);
 
     bool has_connections() const;
@@ -34,7 +34,6 @@ public:
     QString m_nickname;
 
 signals:
-    // Сигналы для ядра
     void connected();
     void disconnected();
     void data_received(const QByteArray &data);

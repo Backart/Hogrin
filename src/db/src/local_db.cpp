@@ -68,6 +68,16 @@ bool Local_DB::create_tables()
         return false;
     }
 
+    if (!q.exec("CREATE TABLE IF NOT EXISTS identity (key TEXT PRIMARY KEY, value BLOB)")) {
+        qWarning() << "Local_DB: create identity failed:" << q.lastError().text();
+        return false;
+    }
+
+    if (!q.exec("CREATE TABLE IF NOT EXISTS contacts (peer TEXT PRIMARY KEY, pubkey BLOB)")) {
+        qWarning() << "Local_DB: create contacts failed:" << q.lastError().text();
+        return false;
+    }
+
     return true;
 }
 
@@ -224,4 +234,54 @@ QStringList Local_DB::get_recent_chats() const
     }
 
     return recent_chats;
+}
+
+// ── keys storage ───────────────────────────────────────────────────────────
+
+bool Local_DB::save_identity(const QByteArray &pubkey, const QByteArray &seckey)
+{
+    if (!m_ready) return false;
+    QSqlQuery q(m_db);
+    q.prepare("INSERT OR REPLACE INTO identity (key, value) VALUES ('pubkey', :pub), ('seckey', :sec)");
+    q.bindValue(":pub", pubkey);
+    q.bindValue(":sec", seckey);
+    return q.exec();
+}
+
+bool Local_DB::load_identity(QByteArray &pubkey, QByteArray &seckey) const
+{
+    if (!m_ready) return false;
+    QSqlQuery q(m_db);
+
+    q.exec("SELECT value FROM identity WHERE key = 'pubkey'");
+    if (q.next()) pubkey = q.value(0).toByteArray();
+    else return false; // Нет ключей в базе
+
+    q.exec("SELECT value FROM identity WHERE key = 'seckey'");
+    if (q.next()) seckey = q.value(0).toByteArray();
+    else return false;
+
+    return true;
+}
+
+bool Local_DB::save_contact_key(const QString &peer, const QByteArray &pubkey)
+{
+    if (!m_ready) return false;
+    QSqlQuery q(m_db);
+    q.prepare("INSERT OR REPLACE INTO contacts (peer, pubkey) VALUES (:peer, :pub)");
+    q.bindValue(":peer", peer);
+    q.bindValue(":pub", pubkey);
+    return q.exec();
+}
+
+QByteArray Local_DB::get_contact_key(const QString &peer) const
+{
+    if (!m_ready) return QByteArray();
+    QSqlQuery q(m_db);
+    q.prepare("SELECT pubkey FROM contacts WHERE peer = :peer");
+    q.bindValue(":peer", peer);
+    if (q.exec() && q.next()) {
+        return q.value(0).toByteArray();
+    }
+    return QByteArray();
 }

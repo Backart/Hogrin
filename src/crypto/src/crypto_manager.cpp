@@ -29,12 +29,14 @@ bool Crypto_Manager::compute_shared_secret(const QByteArray &peer_public_key)
 
     int result = -1;
 
-    if (m_is_server) {
+    if (public_key() > peer_public_key) {
+        qDebug() << "Crypto_Manager: Keys compared. I am SERVER for this chat.";
         result = crypto_kx_server_session_keys(m_rx, m_tx,
                                                m_public_key,
                                                m_secret_key,
                                                peer_pk);
     } else {
+        qDebug() << "Crypto_Manager: Keys compared. I am CLIENT for this chat.";
         result = crypto_kx_client_session_keys(m_rx, m_tx,
                                                m_public_key,
                                                m_secret_key,
@@ -47,7 +49,7 @@ bool Crypto_Manager::compute_shared_secret(const QByteArray &peer_public_key)
     }
 
     m_secret_computed = true;
-    qDebug() << "Crypto_Manager: shared secret computed";
+    qDebug() << "Crypto_Manager: shared secret computed successfully";
     return true;
 }
 
@@ -152,4 +154,21 @@ void Crypto_Manager::set_identity(const Crypto_Manager &source)
     memcpy(m_public_key, source.m_public_key, crypto_kx_PUBLICKEYBYTES);
     memcpy(m_secret_key, source.m_secret_key, crypto_kx_SECRETKEYBYTES);
     m_secret_computed = false; // сессионные ключи нужно пересчитать
+}
+
+QByteArray Crypto_Manager::secret_key() const
+{
+    return QByteArray(reinterpret_cast<const char*>(m_secret_key),
+                      crypto_kx_SECRETKEYBYTES);
+}
+
+void Crypto_Manager::load_keypair(const QByteArray &pub, const QByteArray &sec)
+{
+    if (pub.size() == crypto_kx_PUBLICKEYBYTES && sec.size() == crypto_kx_SECRETKEYBYTES) {
+        memcpy(m_public_key, pub.constData(), crypto_kx_PUBLICKEYBYTES);
+        memcpy(m_secret_key, sec.constData(), crypto_kx_SECRETKEYBYTES);
+        qDebug() << "Crypto_Manager: identity keypair loaded from DB";
+    } else {
+        qWarning() << "Crypto_Manager: failed to load keypair, invalid sizes!";
+    }
 }

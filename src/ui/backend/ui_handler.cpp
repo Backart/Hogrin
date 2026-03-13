@@ -42,11 +42,10 @@ UI_Handler::UI_Handler(Messenger_Core *core,QObject *parent)
                 if (success) {
                     emit session_restored(nickname);
                 } else {
-                    // Если токен невалиден (сервер отклонил), чистим локальные настройки
                     QSettings settings("Hogrin", "Hogrin");
                     settings.remove("session/token");
                     settings.remove("session/nickname");
-                    emit session_restored(""); // Пустая строка как индикатор неудачи
+                    emit session_restored("");
                 }
             });
 }
@@ -65,7 +64,6 @@ void UI_Handler::connect_to_host(const QString &host, quint16 port){
 
 void UI_Handler::register_user(const QString &nickname, const QString &password)
 {
-    // Пароль теперь не хешируем на клиенте — это задача bootstrap-сервера (Argon2id)
     m_core->auth_register(nickname, password);
 }
 
@@ -81,11 +79,9 @@ void UI_Handler::check_saved_session()
     QString nickname = settings.value("session/nickname").toString();
 
     if (token.isEmpty() || nickname.isEmpty()) {
-        emit session_restored(""); // Нет сохраненной сессии
+        emit session_restored("");
         return;
     }
-
-    // Асинхронно проверяем токен на сервере
     m_core->auth_verify(token);
 }
 
@@ -131,7 +127,7 @@ QVariantList UI_Handler::load_history(const QString &peer, int limit)
         map["peer"]         = msg.peer;
         map["sender"]       = msg.sender;
         map["text"]         = msg.text;
-        map["timestamp"]    = msg.timestamp;
+        map["timestamp"]    = msg.timestamp.toSecsSinceEpoch();
         map["is_outgoing"]  = msg.is_outgoing;
         map["is_delivered"] = msg.is_delivered;
         result.append(map);
@@ -141,8 +137,6 @@ QVariantList UI_Handler::load_history(const QString &peer, int limit)
 
 QStringList UI_Handler::get_recent_chats()
 {
-    // Вызываем метод из ядра, который сделает SQL-запрос к БД.
-    // Если в m_core его еще нет, тебе нужно будет его там написать!
     return m_core->get_recent_chats();
 }
 

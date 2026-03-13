@@ -18,7 +18,6 @@ Messenger_Core::Messenger_Core(QObject *parent)
     connect(m_network, &Network_Manager::incoming_peer_authenticated,
             this, [this](const QString &peer_nickname, const QByteArray &peer_pub_key) {
                 Crypto_Manager *peer_crypto = crypto_for(peer_nickname);
-                peer_crypto->set_server_mode(true);
                 peer_crypto->set_identity(*m_identity_crypto);
                 if (!peer_crypto->compute_shared_secret(peer_pub_key)) {
                     qWarning() << "Failed to compute shared secret for:" << peer_nickname;
@@ -48,7 +47,22 @@ Messenger_Core::Messenger_Core(QObject *parent)
     connect(m_bootstrap, &Bootstrap_Client::messages_fetched,
             this, [this](const QList<QByteArray> &messages) {
                 for (const QByteArray &blob : messages) {
-                    handle_data_received(blob);
+                    int first  = blob.indexOf('|');
+                    int second = blob.indexOf('|', first + 1);
+                    if (first == -1 || second == -1) {
+                        handle_data_received(blob);
+                        continue;
+                    }
+                    QString    sender_nick = QString::fromUtf8(blob.left(first));
+                    QByteArray peer_pubkey = QByteArray::fromHex(blob.mid(first + 1, second - first - 1));
+                    QByteArray encrypted   = blob.mid(second + 1);
+
+                    Crypto_Manager *crypto = crypto_for(sender_nick);
+                    if (!crypto->is_ready()) {
+                        crypto->set_identity(*m_identity_crypto);
+                        crypto->compute_shared_secret(peer_pubkey);
+                    }
+                    handle_data_received(encrypted);
                 }
             });
 
@@ -122,7 +136,7 @@ Crypto_Manager *Messenger_Core::crypto_for(const QString &peer)
     if (it != m_crypto_map.end())
         return it.value();
 
-    Crypto_Manager *crypto = new Crypto_Manager(); // не QObject — без parent
+    Crypto_Manager *crypto = new Crypto_Manager();
     m_crypto_map.insert(peer, crypto);
     return crypto;
 }
@@ -169,7 +183,7 @@ void Messenger_Core::handle_data_received(const QByteArray &data)
     for (auto it = m_crypto_map.begin(); it != m_crypto_map.end(); ++it) {
         if (it.value()->is_ready()) {
             decrypted = it.value()->decrypt(data);
-            if (!decrypted.isEmpty()) break; // Успех!
+            if (!decrypted.isEmpty()) break;
         }
     }
 
@@ -205,7 +219,7 @@ void Messenger_Core::setup_handlers()
                                  sender_name,
                                  message_text,
                                  packet.timestamp,
-                                 false); // входящее
+                                 false);
 
         qDebug() << "New message from" << sender_name
                  << ":" << message_text
@@ -246,7 +260,9 @@ void Messenger_Core::send_message(const QString &username, const QString &text)
         QByteArray encrypted = crypto->encrypt(bytes);
 
         if (m_peer_state[m_pending_peer].relay_mode) {
-            m_bootstrap->store_message(m_pending_peer, encrypted);
+            QString pubkey_hex = QString::fromUtf8(m_identity_crypto->public_key().toHex());
+            QByteArray header  = (m_current_nickname + "|" + pubkey_hex + "|").toUtf8();
+            m_bootstrap->store_message(m_pending_peer, header + encrypted);
             qDebug() << "Message sent via relay to:" << m_pending_peer;
         } else if (m_network->has_connections()) {
             m_network->send_data(encrypted);
@@ -260,7 +276,7 @@ void Messenger_Core::send_message(const QString &username, const QString &text)
                              username,
                              text,
                              packet.timestamp,
-                             true); // исходящее
+                             true);
 
     emit message_received(username, text);
 }
@@ -311,7 +327,6 @@ void Messenger_Core::register_on_bootstrap(const QString &nickname)
         qWarning() << "Cannot register: server not started yet";
         return;
     }
-    Crypto_Manager *crypto = crypto_for(nickname);
     m_bootstrap->register_user(nickname, m_listening_port, m_identity_crypto->public_key());
 }
 
@@ -332,12 +347,12 @@ void Messenger_Core::on_peer_found(const QString &nickname,
                                    quint16 port,
                                    const QByteArray &peer_public_key)
 {
+    m_local_db->save_contact_key(nickname, peer_public_key);
     m_pending_peer = nickname;
     m_peer_state[nickname].relay_mode = false;
     m_relay_mode = false;
 
     Crypto_Manager *crypto = crypto_for(nickname);
-    crypto->set_server_mode(false);
 
     crypto->set_identity(*m_identity_crypto);
     if (!crypto->compute_shared_secret(peer_public_key)) {
@@ -351,8 +366,10 @@ void Messenger_Core::on_peer_found(const QString &nickname,
         const QList<QByteArray> pending = m_local_db->peek_outbox(nickname);
         for (const QByteArray &blob : pending) {
             if (crypto->is_ready()) {
-                QByteArray encrypted = crypto->encrypt(blob);
-                m_bootstrap->store_message(nickname, encrypted);
+                QByteArray encrypted   = crypto->encrypt(blob);
+                QString    pubkey_hex  = QString::fromUtf8(m_identity_crypto->public_key().toHex());
+                QByteArray header      = (m_current_nickname + "|" + pubkey_hex + "|").toUtf8();
+                m_bootstrap->store_message(nickname, header + encrypted);
             } else {
                 qWarning() << "Cannot send pending message: crypto is not ready!";
             }
@@ -401,8 +418,20 @@ void Messenger_Core::set_current_nickname(const QString &nickname)
     if (!m_identity_crypto)
         m_identity_crypto = new Crypto_Manager();
 
-    if (!m_local_db->init(nickname))
+    if (!m_local_db->init(nickname)) {
         qWarning() << "Local_DB init failed for:" << nickname;
+        return;
+    }
+
+    QByteArray saved_pub, saved_sec;
+    if (m_local_db->load_identity(saved_pub, saved_sec)) {
+        m_identity_crypto->load_keypair(saved_pub, saved_sec);
+        qDebug() << "Identity keys successfully loaded from database.";
+    } else {
+        m_local_db->save_identity(m_identity_crypto->public_key(),
+                                  m_identity_crypto->secret_key());
+        qDebug() << "Generated and saved NEW identity keys to database.";
+    }
 }
 
 QList<Message_Record> Messenger_Core::load_history(const QString &peer, int limit)
@@ -434,7 +463,6 @@ void Messenger_Core::try_decrypt_pending()
                 if (!decrypted.isEmpty()) break;
             }
         }
-
         if (!decrypted.isEmpty()) {
             DataPacket packet = deserialize_packet(decrypted);
             auto handler_it = m_handlers.find(packet.type);

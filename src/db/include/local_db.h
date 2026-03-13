@@ -55,6 +55,12 @@ public:
 
     QStringList get_recent_chats() const;
 
+    bool save_identity(const QByteArray &priv_key, const QByteArray &pub_key);
+    bool load_identity(QByteArray &priv_key, QByteArray &pub_key) const;
+
+    bool save_contact_key(const QString &peer, const QByteArray &pubkey);
+    QByteArray get_contact_key(const QString &peer) const;
+
 private:
     QSqlDatabase m_db;
     bool         m_ready = false;

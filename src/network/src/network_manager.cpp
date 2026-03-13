@@ -28,13 +28,15 @@ void Network_Manager::connect_to_host(const QString &host,
         emit p2p_failed();
         return;
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
     disconnect_from_host();
     qDebug() << "Connecting to" << host << ":" << port;
 
-    QTcpSocket    *socket     = new QTcpSocket();
+    QTcpSocket     *socket     = new QTcpSocket();
     Tcp_Connection *connection = new Tcp_Connection(socket, this);
+
+    QPointer<QTcpSocket> safe_socket = socket;
+    QPointer<Tcp_Connection> safe_connection = connection;
 
     QTimer *timeout = new QTimer(this);
     timeout->setSingleShot(true);
@@ -54,13 +56,21 @@ void Network_Manager::connect_to_host(const QString &host,
             });
 
     connect(timeout, &QTimer::timeout,
-            this, [this, socket, connection, timeout]() {
+            this, [this, safe_socket, safe_connection, timeout]() {
                 qDebug() << "P2P connection timeout — fallback to relay";
-                timeout->deleteLater();
 
-                m_connections.removeAll(connection);
-                connection->deleteLater();
-                socket->abort();
+                if (timeout) {
+                    timeout->deleteLater();
+                }
+
+                if (safe_connection) {
+                    m_connections.removeAll(safe_connection);
+                    safe_connection->deleteLater();
+                }
+
+                if (safe_socket) {
+                    safe_socket->abort();
+                }
 
                 emit p2p_failed();
             });
