@@ -437,6 +437,12 @@ Rectangle {
                             backend.logout()
                             root.isAuthenticated = false
                             root.loggedInUser = ""
+
+                            root.activeChatUser = ""
+                            contactsModel.clear()
+                            if (typeof chatModel !== "undefined") {
+                                chatModel.clear()
+                            }
                         }
                     }
 

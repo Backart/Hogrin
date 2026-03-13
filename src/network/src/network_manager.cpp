@@ -46,10 +46,7 @@ void Network_Manager::connect_to_host(const QString &host,
                 timeout->stop();
                 timeout->deleteLater();
 
-                QByteArray payload = QByteArray(Config::HANDSHAKE_TOKEN)
-                                     + ":"
-                                     + m_nickname.toUtf8() + ":"
-                                     + my_pub_key.toHex();
+                QByteArray payload = m_nickname.toUtf8() + ":" + my_pub_key.toHex();
                 connection->sendMessage(payload);
 
                 emit connected();
@@ -97,24 +94,25 @@ void Network_Manager::handle_new_connection(){
 
         connect(connection, &Tcp_Connection::dataReceived, this, [this, connection](const QByteArray &data){
             if (!connection->property("authenticated").toBool()) {
-                QByteArray expected_token = QByteArray(Config::HANDSHAKE_TOKEN);
+                QByteArray payload = data.trimmed();
+                int sep = payload.indexOf(':');
+                if (sep > 0) {
+                    QString peer_nickname = QString::fromUtf8(payload.left(sep));
+                    QByteArray peer_pub_key = QByteArray::fromHex(payload.mid(sep + 1));
 
-                if (data.startsWith(expected_token + ":")) {
-                    QByteArray rest = data.mid(expected_token.size() + 1).trimmed();
-                    int sep = rest.indexOf(':');
-                    QString peer_nickname = QString::fromUtf8(rest.left(sep));
-                    QByteArray peer_pub_key = QByteArray::fromHex(rest.mid(sep + 1));
+                    if (!peer_nickname.isEmpty() &&
+                        peer_pub_key.size() == crypto_kx_PUBLICKEYBYTES) {
 
-                    connection->setProperty("authenticated", true);
-                    qDebug() << "Client authenticated successfully. Peer key received.";
-
-                    emit incoming_peer_authenticated(peer_nickname, peer_pub_key);
-                    emit connected();
-                } else {
-                    qDebug() << "Invalid handshake — dropping connection";
-                    connection->deleteLater();
-                    m_connections.removeAll(connection);
+                        connection->setProperty("authenticated", true);
+                        qDebug() << "Client authenticated successfully. Peer key received.";
+                        emit incoming_peer_authenticated(peer_nickname, peer_pub_key);
+                        emit connected();
+                        return;
+                    }
                 }
+                qDebug() << "Invalid handshake — dropping connection";
+                connection->deleteLater();
+                m_connections.removeAll(connection);
             } else {
                 handle_data_received(data);
             }

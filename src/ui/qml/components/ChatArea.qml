@@ -360,16 +360,20 @@ Rectangle {
     }
 
     function sendMessage() {
-        const txt = chatInput.text.trim()
-        if (txt.length === 0) return
-        const uname = root.currentUsername
-        chatModel.append({
-            "senderName":  uname,
-            "messageText": txt,
-            "isMe":        true,
-            "msgTime":     Qt.formatDateTime(new Date(), "hh:mm")
-        })
-        backend.send_message_from_ui(uname, txt)
-        chatInput.text = ""
-    }
+            const txt = chatInput.text.trim()
+            if (txt.length === 0) return
+
+            const me = root.currentUsername
+            const peer = root.activeChatUser
+
+            chatModel.append({
+                "senderName":  me,
+                "messageText": txt,
+                "isMe":        true,
+                "msgTime":     Qt.formatDateTime(new Date(), "hh:mm")
+            })
+
+            backend.send_message_from_ui(peer, txt)
+            chatInput.text = ""
+        }
 }

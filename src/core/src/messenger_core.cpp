@@ -25,6 +25,8 @@ Messenger_Core::Messenger_Core(QObject *parent)
                     qDebug() << "Shared secret computed for incoming P2P from:" << peer_nickname;
 
                     m_peer_state[peer_nickname].relay_mode = false;
+                    // FIX: set pending peer so send_message works after incoming connection
+                    m_pending_peer = peer_nickname;
                     try_decrypt_pending();
 
                     if (m_local_db->has_pending(peer_nickname)) {
@@ -84,7 +86,8 @@ Messenger_Core::Messenger_Core(QObject *parent)
     connect(m_bootstrap, &Bootstrap_Client::auth_login_success,
             this, [this](const QString &token, const QString &nickname) {
                 set_current_nickname(nickname);
-                m_poll_timer->start(1000);
+                // FIX: use RELAY_POLL_INTERVAL_MS, not hardcoded 1000
+                m_poll_timer->start(Config::RELAY_POLL_INTERVAL_MS);
                 emit login_completed(true, "", token, nickname);
             });
 
@@ -96,7 +99,8 @@ Messenger_Core::Messenger_Core(QObject *parent)
     connect(m_bootstrap, &Bootstrap_Client::auth_verify_success,
             this, [this](const QString &nickname) {
                 set_current_nickname(nickname);
-                m_poll_timer->start(1000);
+                // FIX: use RELAY_POLL_INTERVAL_MS, not hardcoded 1000
+                m_poll_timer->start(Config::RELAY_POLL_INTERVAL_MS);
                 emit verify_completed(true, nickname);
             });
 
@@ -231,18 +235,25 @@ void Messenger_Core::setup_handlers()
 
 // ── send ─────────────────────────────────────────────────────────────────────
 
-void Messenger_Core::send_message(const QString &username, const QString &text)
+void Messenger_Core::send_message(const QString &peer, const QString &text)
 {
     if (text.isEmpty()) return;
 
-    if (m_pending_peer.isEmpty()) {
-        qWarning() << "Message dropped: No pending peer set!";
+    if (peer == m_current_nickname) {
+        qWarning() << "Anti-schizophrenia guard: You cannot send messages to yourself!";
         return;
     }
 
+    if (peer.isEmpty()) {
+        qWarning() << "Message dropped: peer is empty!";
+        return;
+    }
+
+    m_pending_peer = peer;
+
     QByteArray payload;
     QDataStream stream(&payload, QIODevice::WriteOnly);
-    stream << username << text;
+    stream << m_current_nickname << text;
 
     DataPacket packet;
     packet.type      = MessageType::ChatMessage;
@@ -251,34 +262,34 @@ void Messenger_Core::send_message(const QString &username, const QString &text)
 
     QByteArray bytes = serialize_packet(packet);
 
-    Crypto_Manager *crypto = crypto_for(m_pending_peer);
+    Crypto_Manager *crypto = crypto_for(peer);
 
     if (!crypto->is_ready()) {
-        qWarning() << "Key exchange not done — queuing message for:" << m_pending_peer;
-        m_local_db->enqueue_message(m_pending_peer, bytes);
+        qWarning() << "Key exchange not done — queuing message for:" << peer;
+        m_local_db->enqueue_message(peer, bytes);
     } else {
         QByteArray encrypted = crypto->encrypt(bytes);
 
-        if (m_peer_state[m_pending_peer].relay_mode) {
+        if (m_peer_state[peer].relay_mode) {
             QString pubkey_hex = QString::fromUtf8(m_identity_crypto->public_key().toHex());
             QByteArray header  = (m_current_nickname + "|" + pubkey_hex + "|").toUtf8();
-            m_bootstrap->store_message(m_pending_peer, header + encrypted);
-            qDebug() << "Message sent via relay to:" << m_pending_peer;
+            m_bootstrap->store_message(peer, header + encrypted);
+            qDebug() << "Message sent via relay to:" << peer;
         } else if (m_network->has_connections()) {
             m_network->send_data(encrypted);
         } else {
-            qDebug() << "No connection — queuing message for:" << m_pending_peer;
-            m_local_db->enqueue_message(m_pending_peer, bytes); // В очередь всегда ложим до шифрования
+            qDebug() << "No connection — queuing message for:" << peer;
+            m_local_db->enqueue_message(peer, bytes);
         }
     }
 
-    m_local_db->save_message(m_pending_peer,
-                             username,
+    m_local_db->save_message(peer,
+                             m_current_nickname,
                              text,
                              packet.timestamp,
                              true);
 
-    emit message_received(username, text);
+    emit message_received(m_current_nickname, text);
 }
 
 // ── network ──────────────────────────────────────────────────────────────────
@@ -293,7 +304,6 @@ bool Messenger_Core::start_server(quint16 port)
 
 void Messenger_Core::connect_to_host(const QString &host, quint16 port)
 {
-    Crypto_Manager *crypto = crypto_for(m_pending_peer);
     m_network->connect_to_host(host, port, m_identity_crypto->public_key());
 }
 
@@ -348,13 +358,19 @@ void Messenger_Core::on_peer_found(const QString &nickname,
                                    const QByteArray &peer_public_key)
 {
     m_local_db->save_contact_key(nickname, peer_public_key);
+
+    if (m_pending_peer == nickname && m_network->has_connections()) {
+        qDebug() << "Already connected to" << nickname << "— skipping redundant TCP connection";
+        return;
+    }
+
     m_pending_peer = nickname;
     m_peer_state[nickname].relay_mode = false;
     m_relay_mode = false;
 
     Crypto_Manager *crypto = crypto_for(nickname);
-
     crypto->set_identity(*m_identity_crypto);
+
     if (!crypto->compute_shared_secret(peer_public_key)) {
         qWarning() << "Failed to compute shared secret for:" << nickname;
     } else {
@@ -366,9 +382,9 @@ void Messenger_Core::on_peer_found(const QString &nickname,
         const QList<QByteArray> pending = m_local_db->peek_outbox(nickname);
         for (const QByteArray &blob : pending) {
             if (crypto->is_ready()) {
-                QByteArray encrypted   = crypto->encrypt(blob);
-                QString    pubkey_hex  = QString::fromUtf8(m_identity_crypto->public_key().toHex());
-                QByteArray header      = (m_current_nickname + "|" + pubkey_hex + "|").toUtf8();
+                QByteArray encrypted  = crypto->encrypt(blob);
+                QString    pubkey_hex = QString::fromUtf8(m_identity_crypto->public_key().toHex());
+                QByteArray header     = (m_current_nickname + "|" + pubkey_hex + "|").toUtf8();
                 m_bootstrap->store_message(nickname, header + encrypted);
             } else {
                 qWarning() << "Cannot send pending message: crypto is not ready!";
@@ -394,7 +410,7 @@ void Messenger_Core::on_p2p_failed()
 {
     qDebug() << "P2P failed for" << m_pending_peer << "— switching to relay";
     m_peer_state[m_pending_peer].relay_mode = true;
-    m_relay_mode = true; // кэш
+    m_relay_mode = true;
 
     m_poll_timer->start(Config::RELAY_POLL_INTERVAL_MS);
     emit relay_mode_activated();

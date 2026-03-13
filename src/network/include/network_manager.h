@@ -6,9 +6,11 @@
 #include <QTimer>
 #include <QList>
 #include <QPointer>
+#include <sodium.h>
 
 #include "tcp_connection.h"
 #include "../common/config.h"
+
 
 
 class Network_Manager : public QObject {

@@ -252,7 +252,7 @@ Rectangle {
                         anchors.centerIn: parent
                         text: authRoot.isLoading ? "Please wait..." : (isLoginMode ? "Sign In" : "Create Account")
                         font.pixelSize: 14
-                        font.weight: Font.SemiBold
+                        font.weight: Font.DemiBold
                         color: "#FFFFFF"
                     }
 
@@ -286,7 +286,7 @@ Rectangle {
             Text {
                 text: isLoginMode ? "Sign up" : "Sign in"
                 font.pixelSize: 13
-                font.weight: Font.SemiBold
+                font.weight: Font.DemiBold
                 color: theme.accent
                 anchors.verticalCenter: parent.verticalCenter
 
