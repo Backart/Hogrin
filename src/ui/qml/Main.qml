@@ -46,8 +46,38 @@ Window {
 
     Component.onCompleted: {
         backend.check_saved_session()
+        updateChecker.check_for_updates()
     }
 
+    // ── Update Dialog ────────────────────────────────────────
+    Dialog {
+        id: updateDialog
+        property string downloadUrl: ""
+        property string newVersion: ""
+
+        anchors.centerIn: parent
+        title: "Доступно обновление"
+        modal: true
+        standardButtons: Dialog.Yes | Dialog.No
+
+        Label {
+            text: "Доступна версия " + updateDialog.newVersion + ". Установить?"
+            wrapMode: Text.WordWrap
+        }
+
+        onAccepted: Qt.openUrlExternally(downloadUrl)
+    }
+
+    Connections {
+        target: updateChecker
+        function onUpdate_available(version, url, changelog) {
+            updateDialog.newVersion = version
+            updateDialog.downloadUrl = url
+            updateDialog.open()
+        }
+    }
+
+    // ── Auth ─────────────────────────────────────────────────
     Connections {
         target: backend
         function onSession_restored(nickname) {

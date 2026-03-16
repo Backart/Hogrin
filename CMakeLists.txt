@@ -49,6 +49,8 @@ qt_add_executable(appHogrin
     src/crypto/src/crypto_manager.cpp
     src/db/include/local_db.h
     src/db/src/local_db.cpp
+    src/updater/update_checker.h
+    src/updater/update_checker.cpp
 )
 
 qt_add_qml_module(appHogrin
@@ -87,6 +89,7 @@ target_include_directories(appHogrin PRIVATE
     src/crypto/include
     src/common
     src/db/include
+    src/updater
     $<$<BOOL:${sodium_FOUND}>:${sodium_INCLUDE_DIRS}>
 )
 

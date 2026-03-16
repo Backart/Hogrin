@@ -4,6 +4,7 @@
 #include "../core/include/messenger_core.h"
 #include "../ui/backend/ui_handler.h"
 #include "../common/config.h"
+#include "../updater/update_checker.h"
 
 using namespace Qt::StringLiterals;
 
@@ -25,8 +26,12 @@ int main(int argc, char *argv[])
 
     Messenger_Core core;
     UI_Handler ui_backend(&core);
+    Update_Checker updater;
 
     engine.rootContext()->setContextProperty("backend", &ui_backend);
+    engine.rootContext()->setContextProperty("updateChecker", &updater);
+
     engine.load(url);
+
     return app.exec();
 }
