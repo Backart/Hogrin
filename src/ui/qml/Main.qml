@@ -26,21 +26,17 @@ Window {
 
     onActiveChatUserChanged: {
         chatModel.clear()
-
         if (activeChatUser === "") return;
-
         let history = backend.load_history(activeChatUser, 100);
-
         for (let i = 0; i < history.length; ++i) {
             let msg = history[i];
             let date = new Date(msg.timestamp * 1000);
-
             chatModel.append({
-                                 "senderName":  msg.sender,
-                                 "messageText": msg.text,
-                                 "isMe":        Boolean(msg.is_outgoing),
-                                 "msgTime":     Qt.formatDateTime(date, "hh:mm")
-                             });
+                "senderName":  msg.sender,
+                "messageText": msg.text,
+                "isMe":        Boolean(msg.is_outgoing),
+                "msgTime":     Qt.formatDateTime(date, "hh:mm")
+            });
         }
     }
 
@@ -54,18 +50,45 @@ Window {
         id: updateDialog
         property string downloadUrl: ""
         property string newVersion: ""
+        property bool downloading: false
 
         anchors.centerIn: parent
         title: "Доступно обновление"
         modal: true
-        standardButtons: Dialog.Yes | Dialog.No
+        closePolicy: downloading ? Popup.NoAutoClose : Popup.CloseOnEscape
+        standardButtons: downloading ? Dialog.NoButton : (Dialog.Yes | Dialog.No)
 
-        Label {
-            text: "Доступна версия " + updateDialog.newVersion + ". Установить?"
-            wrapMode: Text.WordWrap
+        ColumnLayout {
+            width: 280
+            spacing: 12
+
+            Label {
+                visible: !updateDialog.downloading
+                text: "Доступна версия " + updateDialog.newVersion + ". Установить?"
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            Label {
+                visible: updateDialog.downloading
+                text: "Скачивание обновления..."
+                Layout.fillWidth: true
+            }
+
+            ProgressBar {
+                id: progressBar
+                visible: updateDialog.downloading
+                Layout.fillWidth: true
+                from: 0
+                to: 100
+                value: 0
+            }
         }
 
-        onAccepted: Qt.openUrlExternally(downloadUrl)
+        onAccepted: {
+            updateDialog.downloading = true
+            updateChecker.download_and_install(downloadUrl)
+        }
     }
 
     Connections {
@@ -75,6 +98,18 @@ Window {
             updateDialog.downloadUrl = url
             updateDialog.open()
         }
+        function onDownload_progress(percent) {
+            progressBar.value = percent
+        }
+        function onDownload_finished() {
+            updateDialog.downloading = false
+            updateDialog.close()
+        }
+        function onDownload_failed(reason) {
+            updateDialog.downloading = false
+            updateDialog.close()
+            console.warn("Download failed:", reason)
+        }
     }
 
     // ── Auth ─────────────────────────────────────────────────
@@ -82,7 +117,6 @@ Window {
         target: backend
         function onSession_restored(nickname) {
             if (nickname.length === 0) return
-
             root.loggedInUser = nickname
             root.isAuthenticated = true
             backend.start_server(0)
@@ -96,14 +130,13 @@ Window {
         target: backend
         function onMessage_received(username, text, time) {
             if (username === root.currentUsername) return
-
             if (username === root.activeChatUser) {
                 chatModel.append({
-                                     "senderName":  username,
-                                     "messageText": text,
-                                     "isMe":        false,
-                                     "msgTime":     Qt.formatDateTime(time, "hh:mm")
-                                 })
+                    "senderName":  username,
+                    "messageText": text,
+                    "isMe":        false,
+                    "msgTime":     Qt.formatDateTime(time, "hh:mm")
+                })
             }
         }
     }
@@ -152,7 +185,6 @@ Window {
         }
     }
 
-    // Phone sidebar overlay
     ChatList {
         id: sidebarOverlay
         visible: root.isPhone && root.sidebarOpen && root.isAuthenticated

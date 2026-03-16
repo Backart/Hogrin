@@ -26,6 +26,8 @@ public:
     void auth_verify  (const QString &token);
     void auth_logout  (const QString &token);
 
+    void ensure_connected();
+
 signals:
     void user_not_found(const QString &nickname);
     void user_found(const QString &nickname, const QString &host,
@@ -56,7 +58,7 @@ private:
     QString m_pending_auth_nickname;
 
     void enqueue(const QString &message);
-    void ensure_connected();
+
     void flush_queue();
     void on_connected();
     void on_disconnected();

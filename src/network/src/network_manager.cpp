@@ -29,7 +29,11 @@ void Network_Manager::connect_to_host(const QString &host,
         return;
     }
 
-    disconnect_from_host();
+    if (!m_connections.isEmpty()) {
+        qDebug() << "Already have connections — skipping new P2P attempt";
+        return;
+    }
+
     qDebug() << "Connecting to" << host << ":" << port;
 
     QTcpSocket     *socket     = new QTcpSocket();

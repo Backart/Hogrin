@@ -25,7 +25,6 @@ Messenger_Core::Messenger_Core(QObject *parent)
                     qDebug() << "Shared secret computed for incoming P2P from:" << peer_nickname;
 
                     m_peer_state[peer_nickname].relay_mode = false;
-                    // FIX: set pending peer so send_message works after incoming connection
                     m_pending_peer = peer_nickname;
                     try_decrypt_pending();
 
@@ -55,16 +54,24 @@ Messenger_Core::Messenger_Core(QObject *parent)
                         handle_data_received(blob);
                         continue;
                     }
+
                     QString    sender_nick = QString::fromUtf8(blob.left(first));
                     QByteArray peer_pubkey = QByteArray::fromHex(blob.mid(first + 1, second - first - 1));
                     QByteArray encrypted   = blob.mid(second + 1);
 
                     Crypto_Manager *crypto = crypto_for(sender_nick);
-                    if (!crypto->is_ready()) {
-                        crypto->set_identity(*m_identity_crypto);
-                        crypto->compute_shared_secret(peer_pubkey);
+
+                    crypto->set_identity(*m_identity_crypto);
+                    crypto->compute_shared_secret(peer_pubkey);
+                    QByteArray decrypted = crypto->decrypt(encrypted);
+
+                    if (!decrypted.isEmpty()) {
+                        DataPacket packet = deserialize_packet(decrypted);
+                        auto it = m_handlers.find(packet.type);
+                        if (it != m_handlers.end()) it->second(packet);
+                    } else {
+                        qWarning() << "Failed to decrypt relay message from:" << sender_nick;
                     }
-                    handle_data_received(encrypted);
                 }
             });
 
@@ -86,7 +93,6 @@ Messenger_Core::Messenger_Core(QObject *parent)
     connect(m_bootstrap, &Bootstrap_Client::auth_login_success,
             this, [this](const QString &token, const QString &nickname) {
                 set_current_nickname(nickname);
-                // FIX: use RELAY_POLL_INTERVAL_MS, not hardcoded 1000
                 m_poll_timer->start(Config::RELAY_POLL_INTERVAL_MS);
                 emit login_completed(true, "", token, nickname);
             });
@@ -359,11 +365,6 @@ void Messenger_Core::on_peer_found(const QString &nickname,
 {
     m_local_db->save_contact_key(nickname, peer_public_key);
 
-    if (m_pending_peer == nickname && m_network->has_connections()) {
-        qDebug() << "Already connected to" << nickname << "— skipping redundant TCP connection";
-        return;
-    }
-
     m_pending_peer = nickname;
     m_peer_state[nickname].relay_mode = false;
     m_relay_mode = false;
@@ -391,18 +392,12 @@ void Messenger_Core::on_peer_found(const QString &nickname,
             }
         }
 
-        connect(m_bootstrap, &Bootstrap_Client::store_confirmed,
-                this, [this, nickname]() {
-                    m_local_db->confirm_outbox(nickname);
-                }, Qt::SingleShotConnection);
-
-        connect(m_bootstrap, &Bootstrap_Client::store_failed,
-                this, [](const QString &reason) {
-                    qWarning() << "Relay store failed, keeping outbox:" << reason;
-                }, Qt::SingleShotConnection);
+        m_local_db->confirm_outbox(nickname);
     }
 
-    m_network->connect_to_host(host, port, m_identity_crypto->public_key());
+    if (!m_network->has_connections()) {
+        m_network->connect_to_host(host, port, m_identity_crypto->public_key());
+    }
     emit peer_found(nickname, host, port);
 }
 
@@ -421,6 +416,7 @@ void Messenger_Core::on_p2p_failed()
 void Messenger_Core::poll_relay_messages()
 {
     if (m_current_nickname.isEmpty()) return;
+    m_bootstrap->ensure_connected();
     m_bootstrap->fetch_messages(m_current_nickname);
 }
 

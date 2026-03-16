@@ -10,27 +10,39 @@ set(CMAKE_AUTOUIC ON)
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network Sql)
 qt_policy(SET QTP0004 NEW)
 
-# ── libsodium ────────────────────────────────────────────────
+# ── libsodium ─────────────────────────────────────────────────────────────────
 find_package(PkgConfig QUIET)
-if (PkgConfig_FOUND AND NOT ANDROID)
+if(PkgConfig_FOUND AND NOT ANDROID)
     pkg_check_modules(sodium QUIET libsodium)
 endif()
 
-if (sodium_FOUND)
+if(sodium_FOUND)
     message(STATUS "Using system libsodium")
 else()
-    message(STATUS "libsodium not found or Android build — fetching from source")
+    message(STATUS "libsodium not found or Android — fetching from source")
     include(FetchContent)
     FetchContent_Declare(
         libsodium
         GIT_REPOSITORY https://github.com/robinlinden/libsodium-cmake.git
         GIT_TAG        master
     )
-FetchContent_MakeAvailable(libsodium)
-set(SODIUM_TARGET sodium)
+    FetchContent_MakeAvailable(libsodium)
+    set(SODIUM_TARGET sodium)
 endif()
-# ─────────────────────────────────────────────────────────────
 
+# ── OpenSSL for Android ───────────────────────────────────────────────────────
+if(ANDROID)
+    include(FetchContent)
+    FetchContent_Declare(
+        android_openssl
+        GIT_REPOSITORY https://github.com/KDAB/android_openssl.git
+        GIT_TAG        master
+    )
+    FetchContent_MakeAvailable(android_openssl)
+    include(${android_openssl_SOURCE_DIR}/android_openssl.cmake)
+endif()
+
+# ── Sources ───────────────────────────────────────────────────────────────────
 qt_add_executable(appHogrin
     src/app/main.cpp
     src/network/include/network_manager.h
@@ -58,20 +70,21 @@ qt_add_qml_module(appHogrin
     VERSION 1.0
     RESOURCE_PREFIX /qt/qml
     QML_FILES
-    src/ui/qml/Main.qml
-    src/ui/qml/components/Style.qml
-    src/ui/qml/components/MessageDelegate.qml
-    src/ui/qml/components/ChatList.qml
-    src/ui/qml/components/ChatArea.qml
-    src/ui/qml/components/AvatarCircle.qml
-    src/ui/qml/components/SectionLabel.qml
-    src/ui/qml/components/SettingsCard.qml
-    src/ui/qml/components/ModernField.qml
-    src/ui/qml/components/AccentButton.qml
-    src/ui/qml/components/ModernSwitch.qml
-    src/ui/qml/components/AuthScreen.qml
+        src/ui/qml/Main.qml
+        src/ui/qml/components/Style.qml
+        src/ui/qml/components/MessageDelegate.qml
+        src/ui/qml/components/ChatList.qml
+        src/ui/qml/components/ChatArea.qml
+        src/ui/qml/components/AvatarCircle.qml
+        src/ui/qml/components/SectionLabel.qml
+        src/ui/qml/components/SettingsCard.qml
+        src/ui/qml/components/ModernField.qml
+        src/ui/qml/components/AccentButton.qml
+        src/ui/qml/components/ModernSwitch.qml
+        src/ui/qml/components/AuthScreen.qml
 )
 
+# ── Link libraries ────────────────────────────────────────────────────────────
 target_link_libraries(appHogrin PRIVATE
     Qt6::Core
     Qt6::Gui
@@ -93,18 +106,15 @@ target_include_directories(appHogrin PRIVATE
     $<$<BOOL:${sodium_FOUND}>:${sodium_INCLUDE_DIRS}>
 )
 
-if (ANDROID)
+# ── Android ───────────────────────────────────────────────────────────────────
+if(ANDROID)
+    find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
+    target_link_libraries(appHogrin PRIVATE Qt6::CorePrivate)
+    add_android_openssl_libraries(appHogrin)
+
     set_target_properties(appHogrin PROPERTIES
         QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/android"
+        QT_ANDROID_MIN_SDK_VERSION 26
+        QT_ANDROID_TARGET_SDK_VERSION 34
     )
-
-include(FetchContent)
-FetchContent_Declare(
-    android_openssl
-    GIT_REPOSITORY https://github.com/KDAB/android_openssl.git
-    GIT_TAG        master
-)
-FetchContent_MakeAvailable(android_openssl)
-include(${android_openssl_SOURCE_DIR}/android_openssl.cmake)
-add_android_openssl_libraries(appHogrin)
 endif()
