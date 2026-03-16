@@ -26,8 +26,8 @@ else()
         GIT_REPOSITORY https://github.com/robinlinden/libsodium-cmake.git
         GIT_TAG        master
     )
-    FetchContent_MakeAvailable(libsodium)
-    set(SODIUM_TARGET sodium)
+FetchContent_MakeAvailable(libsodium)
+set(SODIUM_TARGET sodium)
 endif()
 # ─────────────────────────────────────────────────────────────
 
@@ -58,18 +58,18 @@ qt_add_qml_module(appHogrin
     VERSION 1.0
     RESOURCE_PREFIX /qt/qml
     QML_FILES
-        src/ui/qml/Main.qml
-        src/ui/qml/components/Style.qml
-        src/ui/qml/components/MessageDelegate.qml
-        src/ui/qml/components/ChatList.qml
-        src/ui/qml/components/ChatArea.qml
-        src/ui/qml/components/AvatarCircle.qml
-        src/ui/qml/components/SectionLabel.qml
-        src/ui/qml/components/SettingsCard.qml
-        src/ui/qml/components/ModernField.qml
-        src/ui/qml/components/AccentButton.qml
-        src/ui/qml/components/ModernSwitch.qml
-        src/ui/qml/components/AuthScreen.qml
+    src/ui/qml/Main.qml
+    src/ui/qml/components/Style.qml
+    src/ui/qml/components/MessageDelegate.qml
+    src/ui/qml/components/ChatList.qml
+    src/ui/qml/components/ChatArea.qml
+    src/ui/qml/components/AvatarCircle.qml
+    src/ui/qml/components/SectionLabel.qml
+    src/ui/qml/components/SettingsCard.qml
+    src/ui/qml/components/ModernField.qml
+    src/ui/qml/components/AccentButton.qml
+    src/ui/qml/components/ModernSwitch.qml
+    src/ui/qml/components/AuthScreen.qml
 )
 
 target_link_libraries(appHogrin PRIVATE
@@ -97,4 +97,14 @@ if (ANDROID)
     set_target_properties(appHogrin PROPERTIES
         QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/android"
     )
+
+include(FetchContent)
+FetchContent_Declare(
+    android_openssl
+    GIT_REPOSITORY https://github.com/KDAB/android_openssl.git
+    GIT_TAG        master
+)
+FetchContent_MakeAvailable(android_openssl)
+include(${android_openssl_SOURCE_DIR}/android_openssl.cmake)
+add_android_openssl_libraries(appHogrin)
 endif()
