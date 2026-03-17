@@ -21,25 +21,35 @@ jobs:
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11' # Це зафіксить помилку Python 3.12 в Actions
+        python-version: '3.11'
 
-    - name: Install Dependencies (Linux)
-      if: matrix.os == 'ubuntu-latest'
+    - name: Install Dependencies & Qt
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev ninja-build
+        python -m pip install --upgrade pip
+        pip install aqtinstall
+        # Встановлюємо Qt напряму через aqt (це набагато стабільніше)
+        if [ "${{ matrix.os }}" = "macos-latest" ]; then
+          aqt install-qt mac desktop 6.8.2 clang_64 -m qtnetworkauth qt5compat qtnetworkinformation
+          echo "QT_ROOT=$(pwd)/Qt/6.8.2/macos" >> $GITHUB_ENV
+          echo "$(pwd)/Qt/6.8.2/macos/bin" >> $GITHUB_PATH
+        else
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev ninja-build
+          aqt install-qt linux desktop 6.8.2 gcc_64 -m qtnetworkauth qt5compat qtnetworkinformation
+          echo "QT_ROOT=$(pwd)/Qt/6.8.2/gcc_64" >> $GITHUB_ENV
+          echo "$(pwd)/Qt/6.8.2/gcc_64/bin" >> $GITHUB_PATH
+        fi
 
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3 # Використовуємо стабільну v3
-      with:
-        version: '6.8.2'
-        modules: 'qtnetworkauth qt5compat qtnetworkinformation'
+    - name: Install Ninja (macOS)
+      if: matrix.os == 'macos-latest'
+      run: brew install ninja
 
     - name: Build
       run: |
         mkdir build-release
         cd build-release
-        cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=AppDist ..
+        # Явно вказуємо шлях до Qt, щоб CMake не тупив
+        cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=${{ env.QT_ROOT }} -DCMAKE_INSTALL_PREFIX=AppDist ..
         ninja install
 
     - name: Package macOS DMG
