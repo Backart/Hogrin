@@ -11,7 +11,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network Sql)
 find_package(Qt6 OPTIONAL_COMPONENTS NetworkInformation)
 qt_policy(SET QTP0004 NEW)
 
-# ── libsodium ──────────────────
+# ── libsodium (FetchContent) ──────────────────
 message(STATUS "Fetching libsodium from source...")
 include(FetchContent)
 FetchContent_Declare(
@@ -22,7 +22,7 @@ FetchContent_Declare(
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(libsodium)
 
-# ── Sources List ──────────────────────────────
+# ── Sources ───────────────────────────────────
 set(HOGRIN_SOURCES
     src/app/main.cpp
     src/network/include/network_manager.h
@@ -51,8 +51,7 @@ qt_add_qml_module(appHogrin
     URI Hogrin
     VERSION 1.0
     RESOURCE_PREFIX /qt/qml
-    RESOURCES
-        assets/fonts/NotoEmoji-Regular.ttf
+    RESOURCES assets/fonts/NotoEmoji-Regular.ttf
     QML_FILES
         src/ui/qml/Main.qml
         src/ui/qml/components/Style.qml
@@ -68,8 +67,10 @@ qt_add_qml_module(appHogrin
         src/ui/qml/components/AuthScreen.qml
 )
 
-# ── Linking ───────────────────────────────────
-target_link_libraries(appHogrin PRIVATE
+# ── Linking (Фінальна формула для Windows) ────
+
+# Ми використовуємо PUBLIC, щоб Qt був доступний навіть автозгенерованому коду QML
+target_link_libraries(appHogrin PUBLIC
     Qt6::Core
     Qt6::Gui
     Qt6::Quick
@@ -94,7 +95,7 @@ if(TARGET Qt6::NetworkInformation)
     target_compile_definitions(appHogrin PRIVATE HAS_QT_NETWORK_INFORMATION)
 endif()
 
-# ── Android ────────────────────────
+# ── Android ───────────────────────────────────
 if(ANDROID)
     find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
     target_link_libraries(appHogrin PRIVATE Qt6::CorePrivate)
