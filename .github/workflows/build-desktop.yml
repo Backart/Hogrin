@@ -15,57 +15,44 @@ jobs:
         os: [macos-latest, ubuntu-latest]
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - name: Install Ninja
+        run: |
+          if [ "${{ matrix.os }}" == "macos-latest" ]; then
+            brew install ninja
+          else
+            sudo apt-get update
+            sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-dev
+          fi
 
-    - name: Install Qt & Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install aqtinstall
-        
-        if [ "${{ matrix.os }}" = "macos-latest" ]; then
-          # Для Mac (M1/M2) використовуємо mac_arm64
-          python -m aqt install-qt mac desktop 6.8.2 mac_arm64 -m qt5compat qtnetworkauth
-          echo "QT_ROOT=$(pwd)/Qt/6.8.2/macos" >> $GITHUB_ENV
-          echo "$(pwd)/Qt/6.8.2/macos/bin" >> $GITHUB_PATH
-        else
-          sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev ninja-build
-          # Для Linux стандарт gcc_64
-          python -m aqt install-qt linux desktop 6.8.2 gcc_64 -m qt5compat qtnetworkauth
-          echo "QT_ROOT=$(pwd)/Qt/6.8.2/gcc_64" >> $GITHUB_ENV
-          echo "$(pwd)/Qt/6.8.2/gcc_64/bin" >> $GITHUB_PATH
-        fi
+      - name: Setup Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.8.2'
+          # Added qtsql as it's in your CMakeLists
+          modules: 'qtnetworkauth qt5compat qtnetworkinformation qtsql'
+          cache: true
 
-    - name: Install Ninja (macOS)
-      if: matrix.os == 'macos-latest'
-      run: brew install ninja
+      - name: Build Project
+        run: |
+          cmake -G Ninja -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=dist
+          cmake --build build --target install
 
-    - name: Build
-      run: |
-        mkdir build-release
-        cd build-release
-        cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=${{ env.QT_ROOT }} -DCMAKE_INSTALL_PREFIX=AppDist ..
-        ninja install
+      - name: Package macOS (DMG)
+        if: matrix.os == 'macos-latest'
+        run: |
+          # Use the Qt path provided by the action
+          macdeployqt build/dist/appHogrin.app -qmldir=src/ui/qml -dmg
+          mv build/dist/appHogrin.dmg Hogrin-macOS.dmg
 
-    - name: Package macOS DMG
-      if: matrix.os == 'macos-latest'
-      run: |
-        cd build-release
-        # Додаємо шлях до бінарників Qt в PATH явно для macdeployqt
-        export PATH=${{ env.QT_ROOT }}/bin:$PATH
-        macdeployqt AppDist/appHogrin.app -qmldir=../src/ui/qml -dmg
-        mv AppDist/appHogrin.dmg ../Hogrin-macOS.dmg
-
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: Hogrin-${{ matrix.os }}
-        path: |
-          Hogrin-macOS.dmg
-          build-release/AppDist/
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hogrin-${{ matrix.os }}
+          path: |
+            Hogrin-macOS.dmg
+            build/dist/
