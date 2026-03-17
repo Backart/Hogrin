@@ -11,7 +11,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network Sql)
 find_package(Qt6 OPTIONAL_COMPONENTS NetworkInformation)
 qt_policy(SET QTP0004 NEW)
 
-# ── libsodium (FetchContent для всіх платформ) ─────────────────────────────────
+# ── libsodium ─────────────────────────────────
 message(STATUS "Fetching libsodium from source...")
 include(FetchContent)
 FetchContent_Declare(
@@ -24,6 +24,47 @@ FetchContent_MakeAvailable(libsodium)
 set(SODIUM_LINK_TARGET sodium)
 
 # ── Sources ───────────────────────────────────────────────────────────────────
+
+add_library(HogrinBackend STATIC
+    src/network/include/network_manager.h
+    src/network/src/network_manager.cpp
+    src/network/include/tcp_connection.h
+    src/network/src/tcp_connection.cpp
+    src/network/include/bootstrap_client.h
+    src/network/src/bootstrap_client.cpp
+    src/core/include/messenger_core.h
+    src/core/src/messenger_core.cpp
+    src/ui/backend/ui_handler.h
+    src/ui/backend/ui_handler.cpp
+    src/common/types.h
+    src/common/config.h
+    src/crypto/include/crypto_manager.h
+    src/crypto/src/crypto_manager.cpp
+    src/db/include/local_db.h
+    src/db/src/local_db.cpp
+    src/updater/update_checker.h
+    src/updater/update_checker.cpp
+)
+
+target_link_libraries(HogrinBackend PUBLIC
+    Qt6::Core
+    Qt6::Network
+    Qt6::Sql
+    Qt6::Qml
+    ${SODIUM_LINK_TARGET}
+    $<$<TARGET_EXISTS:Qt6::NetworkInformation>:Qt6::NetworkInformation>
+)
+
+target_include_directories(HogrinBackend PUBLIC
+    src/app
+    src/core/include
+    src/network/include
+    src/crypto/include
+    src/common
+    src/db/include
+    src/updater
+)
+
 qt_add_executable(appHogrin
     src/app/main.cpp
 )
@@ -32,30 +73,8 @@ qt_add_qml_module(appHogrin
     URI Hogrin
     VERSION 1.0
     RESOURCE_PREFIX /qt/qml
-
-    SOURCES
-        src/network/include/network_manager.h
-        src/network/src/network_manager.cpp
-        src/network/include/tcp_connection.h
-        src/network/src/tcp_connection.cpp
-        src/network/include/bootstrap_client.h
-        src/network/src/bootstrap_client.cpp
-        src/core/include/messenger_core.h
-        src/core/src/messenger_core.cpp
-        src/ui/backend/ui_handler.h
-        src/ui/backend/ui_handler.cpp
-        src/common/types.h
-        src/common/config.h
-        src/crypto/include/crypto_manager.h
-        src/crypto/src/crypto_manager.cpp
-        src/db/include/local_db.h
-        src/db/src/local_db.cpp
-        src/updater/update_checker.h
-        src/updater/update_checker.cpp
-
     RESOURCES
         assets/fonts/NotoEmoji-Regular.ttf
-
     QML_FILES
         src/ui/qml/Main.qml
         src/ui/qml/components/Style.qml
@@ -72,29 +91,16 @@ qt_add_qml_module(appHogrin
 )
 
 # ── Link libraries ────────────────────────────────────────────────────────────
+
 target_link_libraries(appHogrin PRIVATE
+    HogrinBackend
     Qt6::Core
     Qt6::Gui
-    Qt6::Qml
     Qt6::Quick
-    Qt6::Network
-    Qt6::Sql
-    $<$<TARGET_EXISTS:Qt6::NetworkInformation>:Qt6::NetworkInformation>
-    ${SODIUM_LINK_TARGET}
-)
-
-target_include_directories(appHogrin PRIVATE
-    src/app
-    src/core/include
-    src/network/include
-    src/crypto/include
-    src/common
-    src/db/include
-    src/updater
 )
 
 if(TARGET Qt6::NetworkInformation)
-    target_compile_definitions(appHogrin PRIVATE HAS_QT_NETWORK_INFORMATION)
+    target_compile_definitions(HogrinBackend PRIVATE HAS_QT_NETWORK_INFORMATION)
     message(STATUS "Qt6::NetworkInformation found — network change detection enabled")
 else()
     message(STATUS "Qt6::NetworkInformation NOT found — network change detection disabled")
