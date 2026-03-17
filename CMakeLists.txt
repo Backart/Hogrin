@@ -14,11 +14,12 @@ qt_policy(SET QTP0004 NEW)
 # ── libsodium ─────────────────────────────────────────────────────────────────
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND AND NOT ANDROID)
-    pkg_check_modules(sodium QUIET libsodium)
+    pkg_check_modules(sodium QUIET IMPORTED_TARGET libsodium)
 endif()
 
 if(sodium_FOUND)
     message(STATUS "Using system libsodium")
+    set(SODIUM_LINK_TARGET PkgConfig::sodium)
 else()
     message(STATUS "libsodium not found or Android — fetching from source")
     include(FetchContent)
@@ -95,7 +96,6 @@ target_include_directories(appHogrin PRIVATE
     src/common
     src/db/include
     src/updater
-    $<$<BOOL:${sodium_FOUND}>:${sodium_INCLUDE_DIRS}>
 )
 
 if(TARGET Qt6::NetworkInformation)
