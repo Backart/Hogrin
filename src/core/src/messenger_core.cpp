@@ -70,13 +70,52 @@ Messenger_Core::Messenger_Core(QObject *parent)
                         auto it = m_handlers.find(packet.type);
                         if (it != m_handlers.end()) it->second(packet);
                     } else {
-                        qWarning() << "Failed to decrypt relay message from:" << sender_nick;
+                        qWarning() << "Stale/undecryptable relay message from:" << sender_nick
+                                   << "— discarding (likely from previous session with different keys)";
                     }
                 }
             });
 
     connect(m_poll_timer, &QTimer::timeout,
             this, &Messenger_Core::poll_relay_messages);
+
+    connect(m_bootstrap, &Bootstrap_Client::reconnected,
+            this, [this]() {
+                m_network->set_skip_p2p(false);
+
+                if (!m_current_nickname.isEmpty()) {
+                    register_on_bootstrap(m_current_nickname);
+                }
+            });
+
+    connect(m_network, &Network_Manager::all_connections_lost,
+            this, [this]() {
+                qDebug() << "All P2P connections lost — switching all peers to relay";
+
+                for (auto &state : m_peer_state) {
+                    state.relay_mode = true;
+                }
+                m_relay_mode = true;
+                emit relay_mode_activated();
+
+                for (auto it = m_peer_state.begin(); it != m_peer_state.end(); ++it) {
+                    const QString &peer = it.key();
+                    if (!m_local_db->has_pending(peer)) continue;
+
+                    Crypto_Manager *crypto = crypto_for(peer);
+                    if (!crypto->is_ready()) continue;
+
+                    const QList<QByteArray> pending = m_local_db->peek_outbox(peer);
+                    for (const QByteArray &blob : pending) {
+                        QByteArray encrypted  = crypto->encrypt(blob);
+                        QString    pubkey_hex = QString::fromUtf8(m_identity_crypto->public_key().toHex());
+                        QByteArray header     = (m_current_nickname + "|" + pubkey_hex + "|").toUtf8();
+                        m_bootstrap->store_message(peer, header + encrypted);
+                        qDebug() << "Flushed queued message via relay to:" << peer;
+                    }
+                    m_local_db->confirm_outbox(peer);
+                }
+            });
 
     // ── async auth ───────────────────────────────────────────────────────────
 

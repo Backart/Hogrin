@@ -14,8 +14,9 @@ public:
 
     Q_INVOKABLE void check_for_updates();
     Q_INVOKABLE void download_and_install(const QString &url);
+    Q_INVOKABLE void trigger_install();
 
-    static constexpr const char* CURRENT_VERSION = "1.0.4";
+    static constexpr const char* CURRENT_VERSION = "1.0.5";
     static constexpr const char* VERSION_URL =
         "https://monk-hub.space/public.php/dav/files/QGB6xkr3zKF6FYd/version.json";
 
@@ -33,6 +34,7 @@ private:
     QNetworkAccessManager *m_nam;
     static int compare_versions(const QString &a, const QString &b);
     void install_apk(const QString &apk_path);
+    QString m_pending_apk_path;
 };
 
 #endif // UPDATE_CHECKER_H

@@ -45,70 +45,184 @@ Window {
         updateChecker.check_for_updates()
     }
 
+    // ── Translations ─────────────────────────────────────────
+    QtObject {
+        id: tr
+
+        readonly property string langCode: Qt.locale().name.substring(0, 2)
+
+        readonly property var strings: ({
+            "ru": {
+                updateTitle:    "Доступно обновление",
+                updateQuestion: "Доступна версия %1.\nУстановить?",
+                downloading:    "Скачивание... %1%",
+                downloadDone:   "Готово к установке",
+                installInfo:    "Android попросит разрешение на установку из неизвестных источников — "
+                              + "это нормально. Обновление загружено с вашего сервера.",
+                installBtn:     "Установить",
+                changelog:      "Что нового:",
+                error:          "Ошибка загрузки"
+            },
+            "de": {
+                updateTitle:    "Update verfügbar",
+                updateQuestion: "Version %1 ist verfügbar.\nJetzt installieren?",
+                downloading:    "Lade herunter... %1%",
+                downloadDone:   "Bereit zur Installation",
+                installInfo:    "Android fragt nach Erlaubnis, aus unbekannten Quellen zu installieren — "
+                              + "das ist normal. Das Update wurde von Ihrem Server heruntergeladen.",
+                installBtn:     "Installieren",
+                changelog:      "Neuigkeiten:",
+                error:          "Fehler beim Herunterladen"
+            },
+            "en": {
+                updateTitle:    "Update available",
+                updateQuestion: "Version %1 is available.\nInstall now?",
+                downloading:    "Downloading... %1%",
+                downloadDone:   "Ready to install",
+                installInfo:    "Android will ask for permission to install from unknown sources — "
+                              + "this is expected. The update was downloaded from your own server.",
+                installBtn:     "Install",
+                changelog:      "What's new:",
+                error:          "Download failed"
+            }
+        })
+
+        function t(key) {
+            let lang = strings[langCode] ? langCode : "en"
+            return strings[lang][key] || strings["en"][key] || key
+        }
+
+        function tf(key, arg) {
+            return t(key).replace("%1", arg)
+        }
+    }
+
     // ── Update Dialog ────────────────────────────────────────
     Dialog {
         id: updateDialog
         property string downloadUrl: ""
         property string newVersion: ""
-        property bool downloading: false
+        property string changelog: ""
+        property int    downloadPercent: 0
+        property bool   downloading: false
+        property bool   readyToInstall: false
+        property string pendingApkPath: ""
 
         anchors.centerIn: parent
-        title: "Доступно обновление"
+        title: tr.t("updateTitle")
         modal: true
-        closePolicy: downloading ? Popup.NoAutoClose : Popup.CloseOnEscape
-        standardButtons: downloading ? Dialog.NoButton : (Dialog.Yes | Dialog.No)
+        closePolicy: (downloading || readyToInstall) ? Popup.NoAutoClose : Popup.CloseOnEscape
+        standardButtons: (downloading || readyToInstall) ? Dialog.NoButton
+                                                         : (Dialog.Yes | Dialog.No)
 
         ColumnLayout {
-            width: 280
+            width: 300
             spacing: 12
 
             Label {
-                visible: !updateDialog.downloading
-                text: "Доступна версия " + updateDialog.newVersion + ". Установить?"
+                visible: !updateDialog.downloading && !updateDialog.readyToInstall
+                text: tr.tf("updateQuestion", updateDialog.newVersion)
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }
 
             Label {
+                visible: !updateDialog.downloading
+                      && !updateDialog.readyToInstall
+                      && updateDialog.changelog !== ""
+                text: tr.t("changelog") + "\n" + updateDialog.changelog
+                wrapMode: Text.WordWrap
+                font.pixelSize: 12
+                opacity: 0.7
+                Layout.fillWidth: true
+            }
+
+            Label {
                 visible: updateDialog.downloading
-                text: "Скачивание обновления..."
+                text: tr.tf("downloading", updateDialog.downloadPercent)
                 Layout.fillWidth: true
             }
 
             ProgressBar {
-                id: progressBar
                 visible: updateDialog.downloading
                 Layout.fillWidth: true
-                from: 0
-                to: 100
-                value: 0
+                from: 0; to: 100
+                value: updateDialog.downloadPercent
+            }
+
+            Rectangle {
+                visible: updateDialog.readyToInstall
+                Layout.fillWidth: true
+                height: installCol.implicitHeight + 24
+                color: "#1a1a2e"
+                radius: 8
+
+                ColumnLayout {
+                    id: installCol
+                    anchors { left: parent.left; right: parent.right;
+                               top: parent.top; margins: 12 }
+                    spacing: 10
+
+                    Label {
+                        text: "✓ " + tr.t("downloadDone")
+                        font.bold: true
+                        color: "#4caf50"
+                        Layout.fillWidth: true
+                    }
+
+                    Label {
+                        text: tr.t("installInfo")
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: 12
+                        opacity: 0.85
+                        Layout.fillWidth: true
+                    }
+
+                    Button {
+                        text: tr.t("installBtn")
+                        Layout.fillWidth: true
+                        onClicked: {
+                            updateChecker.trigger_install()
+                            updateDialog.close()
+                        }
+                    }
+                }
             }
         }
 
         onAccepted: {
             updateDialog.downloading = true
+            updateDialog.downloadPercent = 0
             updateChecker.download_and_install(downloadUrl)
+        }
+
+        onRejected: {
+            updateDialog.downloading = false
+            updateDialog.readyToInstall = false
         }
     }
 
     Connections {
         target: updateChecker
         function onUpdate_available(version, url, changelog) {
-            updateDialog.newVersion = version
+            updateDialog.newVersion  = version
             updateDialog.downloadUrl = url
+            updateDialog.changelog   = changelog
+            updateDialog.downloading = false
+            updateDialog.readyToInstall = false
             updateDialog.open()
         }
         function onDownload_progress(percent) {
-            progressBar.value = percent
+            updateDialog.downloadPercent = percent
         }
         function onDownload_finished() {
-            updateDialog.downloading = false
-            updateDialog.close()
+            updateDialog.downloading    = false
+            updateDialog.readyToInstall = true
         }
         function onDownload_failed(reason) {
             updateDialog.downloading = false
             updateDialog.close()
-            console.warn("Download failed:", reason)
+            console.warn(tr.t("error") + ":", reason)
         }
     }
 

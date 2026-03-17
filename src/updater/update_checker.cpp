@@ -100,6 +100,7 @@ void Update_Checker::download_and_install(const QString &url)
         file.close();
 
         qDebug() << "APK saved to:" << apk_path;
+        m_pending_apk_path = apk_path;
         emit download_finished();
         install_apk(apk_path);
     });
@@ -169,4 +170,10 @@ int Update_Checker::compare_versions(const QString &a, const QString &b)
         if (av != bv) return av - bv;
     }
     return 0;
+}
+
+void Update_Checker::trigger_install()
+{
+    if (!m_pending_apk_path.isEmpty())
+        install_apk(m_pending_apk_path);
 }

@@ -42,6 +42,7 @@ signals:
 
     void p2p_failed();
     void incoming_peer_authenticated(const QString &peer_nickname, const QByteArray &peer_pub_key);
+    void all_connections_lost();
 
 private slots:
     // Внутренние слоты

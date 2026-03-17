@@ -8,6 +8,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network Sql)
+find_package(Qt6 OPTIONAL_COMPONENTS NetworkInformation)
 qt_policy(SET QTP0004 NEW)
 
 # ── libsodium ─────────────────────────────────────────────────────────────────
@@ -28,18 +29,6 @@ else()
     )
     FetchContent_MakeAvailable(libsodium)
     set(SODIUM_TARGET sodium)
-endif()
-
-# ── OpenSSL for Android ───────────────────────────────────────────────────────
-if(ANDROID)
-    include(FetchContent)
-    FetchContent_Declare(
-        android_openssl
-        GIT_REPOSITORY https://github.com/KDAB/android_openssl.git
-        GIT_TAG        master
-    )
-    FetchContent_MakeAvailable(android_openssl)
-    include(${android_openssl_SOURCE_DIR}/android_openssl.cmake)
 endif()
 
 # ── Sources ───────────────────────────────────────────────────────────────────
@@ -92,6 +81,7 @@ target_link_libraries(appHogrin PRIVATE
     Qt6::Quick
     Qt6::Network
     Qt6::Sql
+    $<$<TARGET_EXISTS:Qt6::NetworkInformation>:Qt6::NetworkInformation>
     $<IF:$<BOOL:${sodium_FOUND}>,${sodium_LIBRARIES},${SODIUM_TARGET}>
 )
 
@@ -106,15 +96,38 @@ target_include_directories(appHogrin PRIVATE
     $<$<BOOL:${sodium_FOUND}>:${sodium_INCLUDE_DIRS}>
 )
 
+if(TARGET Qt6::NetworkInformation)
+    target_compile_definitions(appHogrin PRIVATE HAS_QT_NETWORK_INFORMATION)
+    message(STATUS "Qt6::NetworkInformation found — network change detection enabled")
+else()
+    message(STATUS "Qt6::NetworkInformation NOT found — network change detection disabled")
+endif()
+
 # ── Android ───────────────────────────────────────────────────────────────────
 if(ANDROID)
     find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
     target_link_libraries(appHogrin PRIVATE Qt6::CorePrivate)
-    add_android_openssl_libraries(appHogrin)
+
+    include(FetchContent)
+    FetchContent_Declare(
+        android_openssl
+        GIT_REPOSITORY https://github.com/KDAB/android_openssl.git
+        GIT_TAG        master
+    )
+    FetchContent_MakeAvailable(android_openssl)
+
+    message(STATUS "android_openssl SOURCE_DIR: ${android_openssl_SOURCE_DIR}")
+
+    if(EXISTS "${android_openssl_SOURCE_DIR}/android_openssl.cmake")
+        include("${android_openssl_SOURCE_DIR}/android_openssl.cmake")
+        add_android_openssl_libraries(appHogrin)
+    else()
+        message(WARNING "android_openssl.cmake not found — OpenSSL will be missing on Android")
+    endif()
 
     set_target_properties(appHogrin PROPERTIES
         QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/android"
-        QT_ANDROID_MIN_SDK_VERSION 26
+        QT_ANDROID_MIN_SDK_VERSION    26
         QT_ANDROID_TARGET_SDK_VERSION 34
     )
 endif()

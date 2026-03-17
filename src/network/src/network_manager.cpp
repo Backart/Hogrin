@@ -83,6 +83,8 @@ void Network_Manager::connect_to_host(const QString &host,
             this, [this, connection]() {
                 m_connections.removeAll(connection);
                 connection->deleteLater();
+                if (m_connections.isEmpty())
+                    emit all_connections_lost();
                 emit disconnected();
             });
 
@@ -125,6 +127,9 @@ void Network_Manager::handle_new_connection(){
         connect(connection, &Tcp_Connection::disconnected, this, [this, connection](){
             m_connections.removeAll(connection);
             connection->deleteLater();
+            if (m_connections.isEmpty())
+                emit all_connections_lost();
+            emit disconnected();
         });
 
         m_connections.append(connection);

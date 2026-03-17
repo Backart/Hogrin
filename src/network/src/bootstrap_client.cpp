@@ -18,7 +18,6 @@ Bootstrap_Client::Bootstrap_Client(QObject *parent)
             this, [this](QAbstractSocket::SocketError err){
                 qWarning() << "Bootstrap socket error:" << err << m_socket->errorString();
                 m_socket->abort();
-                if (!m_queue.isEmpty()) m_reconnect_timer->start();
             });
 
     connect(m_socket, &QTcpSocket::readyRead, this, [this](){
@@ -29,6 +28,24 @@ Bootstrap_Client::Bootstrap_Client(QObject *parent)
                 parse_response(line);
         }
     });
+
+#ifdef HAS_QT_NETWORK_INFORMATION
+    if (QNetworkInformation::loadBackendByFeatures(
+            QNetworkInformation::Feature::Reachability)) {
+        connect(QNetworkInformation::instance(),
+                &QNetworkInformation::reachabilityChanged,
+                this,
+                [this](QNetworkInformation::Reachability r) {
+                    if (r == QNetworkInformation::Reachability::Online) {
+                        qDebug() << "Bootstrap: network restored — forcing reconnect";
+                        force_reconnect();
+                    }
+                });
+        qDebug() << "Bootstrap: network change detection active";
+    }
+#else
+    qDebug() << "Bootstrap: network change detection not available (no Qt6::NetworkInformation)";
+#endif
 
     connect(m_reconnect_timer, &QTimer::timeout,
             this, &Bootstrap_Client::ensure_connected);
@@ -53,14 +70,20 @@ void Bootstrap_Client::on_connected()
     qDebug() << "Bootstrap: connected";
     m_last_response_time = QDateTime::currentDateTime();
     m_reconnect_timer->stop();
+
+    if (!m_first_connect) {
+        emit reconnected();
+    }
+    m_first_connect = false;
+
     flush_queue();
 }
 
 void Bootstrap_Client::on_disconnected()
 {
     qDebug() << "Bootstrap: disconnected — retrying in 2s";
-    if (!m_queue.isEmpty())
-        m_reconnect_timer->start();
+    m_first_connect = false;
+    m_reconnect_timer->start();
 }
 
 void Bootstrap_Client::enqueue(const QString &message)
@@ -69,12 +92,11 @@ void Bootstrap_Client::enqueue(const QString &message)
     m_queue.enqueue(message);
 
     if (m_socket->state() == QAbstractSocket::ConnectedState) {
-        if (was_empty && m_last_response_time.isValid() && m_last_response_time.msecsTo(QDateTime::currentDateTime()) > 15000) {
+        if (was_empty && m_last_response_time.isValid()
+            && m_last_response_time.msecsTo(QDateTime::currentDateTime()) > 6000) {
             qWarning() << "Zombie socket detected (idle > 4s). Force reconnecting...";
             m_socket->abort();
-            ensure_connected();
         } else {
-            m_last_response_time = QDateTime::currentDateTime();
             flush_queue();
         }
     } else {
@@ -217,4 +239,10 @@ bool Bootstrap_Client::store_message(const QString &nickname,
 void Bootstrap_Client::fetch_messages(const QString &nickname)
 {
     enqueue(QString("FETCH:%1").arg(nickname));
+}
+
+void Bootstrap_Client::force_reconnect()
+{
+    m_socket->abort();
+    QTimer::singleShot(500, this, &Bootstrap_Client::ensure_connected);
 }

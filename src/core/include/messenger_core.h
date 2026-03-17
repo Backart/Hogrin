@@ -53,6 +53,8 @@ public:
 
     quint16 get_listening_port() const;
 
+    void on_network_restored();
+
     ~Messenger_Core();
 
 signals:
