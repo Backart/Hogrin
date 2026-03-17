@@ -11,7 +11,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network Sql)
 find_package(Qt6 OPTIONAL_COMPONENTS NetworkInformation)
 qt_policy(SET QTP0004 NEW)
 
-# ── libsodium ─────────────────────────────────
+# ── libsodium ──────────────────
 message(STATUS "Fetching libsodium from source...")
 include(FetchContent)
 FetchContent_Declare(
@@ -22,9 +22,7 @@ FetchContent_Declare(
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(libsodium)
 
-# ── Sources ───────────────────────────────────────────────────────────────────
-
-# Просто створюємо список всіх твоїх C++ файлів
+# ── Sources List ──────────────────────────────
 set(HOGRIN_SOURCES
     src/app/main.cpp
     src/network/include/network_manager.h
@@ -47,10 +45,8 @@ set(HOGRIN_SOURCES
     src/updater/update_checker.cpp
 )
 
-# Створюємо ОДИН виконуваний файл з усіма вихідниками
 qt_add_executable(appHogrin ${HOGRIN_SOURCES})
 
-# Додаємо QML модуль прямо до цього файлу
 qt_add_qml_module(appHogrin
     URI Hogrin
     VERSION 1.0
@@ -72,9 +68,7 @@ qt_add_qml_module(appHogrin
         src/ui/qml/components/AuthScreen.qml
 )
 
-# ── Link libraries ────────────────────────────────────────────────────────────
-
-# Лінкуємо все ОДНИМ блоком. Це гарантує правильний порядок для MinGW.
+# ── Linking ───────────────────────────────────
 target_link_libraries(appHogrin PRIVATE
     Qt6::Core
     Qt6::Gui
@@ -100,7 +94,7 @@ if(TARGET Qt6::NetworkInformation)
     target_compile_definitions(appHogrin PRIVATE HAS_QT_NETWORK_INFORMATION)
 endif()
 
-# ── Android (без змін) ────────────────────────────────────────────────────────
+# ── Android ────────────────────────
 if(ANDROID)
     find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
     target_link_libraries(appHogrin PRIVATE Qt6::CorePrivate)
@@ -118,7 +112,7 @@ if(ANDROID)
     )
 endif()
 
-# ── Desktop Deployment ────────────────────────────────────────────────────────
+# ── Desktop Deployment ────────────────────────
 if(NOT ANDROID)
     include(GNUInstallDirs)
     install(TARGETS appHogrin BUNDLE DESTINATION . RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
