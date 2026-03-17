@@ -19,7 +19,6 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/robinlinden/libsodium-cmake.git
     GIT_TAG        master
 )
-# Вимикаємо тести libsodium, щоб збірка була блискавичною (не чекати 493 кроки!)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(libsodium)
 set(SODIUM_LINK_TARGET sodium)
@@ -27,32 +26,36 @@ set(SODIUM_LINK_TARGET sodium)
 # ── Sources ───────────────────────────────────────────────────────────────────
 qt_add_executable(appHogrin
     src/app/main.cpp
-    src/network/include/network_manager.h
-    src/network/src/network_manager.cpp
-    src/network/include/tcp_connection.h
-    src/network/src/tcp_connection.cpp
-    src/network/include/bootstrap_client.h
-    src/network/src/bootstrap_client.cpp
-    src/core/include/messenger_core.h
-    src/core/src/messenger_core.cpp
-    src/ui/backend/ui_handler.h
-    src/ui/backend/ui_handler.cpp
-    src/common/types.h
-    src/common/config.h
-    src/crypto/include/crypto_manager.h
-    src/crypto/src/crypto_manager.cpp
-    src/db/include/local_db.h
-    src/db/src/local_db.cpp
-    src/updater/update_checker.h
-    src/updater/update_checker.cpp
 )
 
 qt_add_qml_module(appHogrin
     URI Hogrin
     VERSION 1.0
     RESOURCE_PREFIX /qt/qml
+
+    SOURCES
+        src/network/include/network_manager.h
+        src/network/src/network_manager.cpp
+        src/network/include/tcp_connection.h
+        src/network/src/tcp_connection.cpp
+        src/network/include/bootstrap_client.h
+        src/network/src/bootstrap_client.cpp
+        src/core/include/messenger_core.h
+        src/core/src/messenger_core.cpp
+        src/ui/backend/ui_handler.h
+        src/ui/backend/ui_handler.cpp
+        src/common/types.h
+        src/common/config.h
+        src/crypto/include/crypto_manager.h
+        src/crypto/src/crypto_manager.cpp
+        src/db/include/local_db.h
+        src/db/src/local_db.cpp
+        src/updater/update_checker.h
+        src/updater/update_checker.cpp
+
     RESOURCES
         assets/fonts/NotoEmoji-Regular.ttf
+
     QML_FILES
         src/ui/qml/Main.qml
         src/ui/qml/components/Style.qml
