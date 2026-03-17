@@ -133,3 +133,22 @@ if(ANDROID)
         QT_ANDROID_TARGET_SDK_VERSION 34
     )
 endif()
+# ── Desktop Deployment (Windows, macOS, Linux) ────────────────────────────────
+
+if(NOT ANDROID)
+    include(GNUInstallDirs)
+
+    install(TARGETS appHogrin
+        BUNDLE  DESTINATION .
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+
+    qt_generate_deploy_qml_app_script(
+        TARGET appHogrin
+        OUTPUT_SCRIPT deploy_script
+        NO_UNSUPPORTED_PLATFORM_ERROR
+    )
+
+    # 3. Запускаємо цей скрипт
+    install(SCRIPT ${deploy_script})
+endif()
