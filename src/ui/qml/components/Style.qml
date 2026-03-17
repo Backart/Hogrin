@@ -2,6 +2,7 @@ import QtQuick
 
 QtObject {
     id: styleObj
+
     property bool isDarkMode: true
 
     // Backgrounds — slightly warmer, more depth

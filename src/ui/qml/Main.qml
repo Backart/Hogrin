@@ -35,7 +35,8 @@ Window {
                 "senderName":  msg.sender,
                 "messageText": msg.text,
                 "isMe":        Boolean(msg.is_outgoing),
-                "msgTime":     Qt.formatDateTime(date, "hh:mm")
+                "msgTime":     Qt.formatDateTime(date, "hh:mm"),
+                "timestamp":   msg.timestamp
             });
         }
     }
@@ -249,7 +250,8 @@ Window {
                     "senderName":  username,
                     "messageText": text,
                     "isMe":        false,
-                    "msgTime":     Qt.formatDateTime(time, "hh:mm")
+                    "msgTime":     Qt.formatDateTime(time, "hh:mm"),
+                    "timestamp":   Math.floor(time.getTime() / 1000)
                 })
             }
         }

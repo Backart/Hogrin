@@ -58,6 +58,8 @@ qt_add_qml_module(appHogrin
     URI Hogrin
     VERSION 1.0
     RESOURCE_PREFIX /qt/qml
+    RESOURCES
+        assets/fonts/NotoEmoji-Regular.ttf
     QML_FILES
         src/ui/qml/Main.qml
         src/ui/qml/components/Style.qml

@@ -1,6 +1,8 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QFontDatabase>
+
 #include "../core/include/messenger_core.h"
 #include "../ui/backend/ui_handler.h"
 #include "../common/config.h"
@@ -11,6 +13,7 @@ using namespace Qt::StringLiterals;
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+    QFontDatabase::addApplicationFont(":/qt/qml/assets/fonts/NotoEmoji-Regular.ttf");
 
     qRegisterMetaType<Message_Record>();
     qRegisterMetaType<QList<Message_Record>>();

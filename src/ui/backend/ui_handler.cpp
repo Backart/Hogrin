@@ -48,6 +48,13 @@ UI_Handler::UI_Handler(Messenger_Core *core,QObject *parent)
                     emit session_restored("");
                 }
             });
+
+    connect(m_core, &Messenger_Core::relay_mode_activated,
+            this, &UI_Handler::onRelayModeActivated);
+    connect(m_core, &Messenger_Core::peer_found,
+            this, [this](const QString&, const QString&, quint16){
+                onPeerFound("","",0);
+            });
 }
 
 void UI_Handler::send_message_from_ui(const QString &username, const QString &text){
