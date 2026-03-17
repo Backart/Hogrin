@@ -22,6 +22,7 @@ set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(libsodium)
 
 # ── Sources ───────────────────────────────────
+# ПОВНИЙ список файлів (хедери + спп)
 set(PROJECT_SOURCES
     src/app/main.cpp
     # Network
@@ -82,13 +83,7 @@ target_link_libraries(appHogrin PRIVATE
 )
 
 target_include_directories(appHogrin PRIVATE
-    src/app
-    src/core/include
-    src/network/include
-    src/crypto/include
-    src/common
-    src/db/include
-    src/updater
+    src/app src/core/include src/network/include src/crypto/include src/common src/db/include src/updater
 )
 
 if(TARGET Qt6::NetworkInformation)
@@ -99,14 +94,12 @@ endif()
 if(ANDROID)
     find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
     target_link_libraries(appHogrin PRIVATE Qt6::CorePrivate)
-
     FetchContent_Declare(android_openssl GIT_REPOSITORY https://github.com/KDAB/android_openssl.git GIT_TAG master)
     FetchContent_MakeAvailable(android_openssl)
     if(EXISTS "${android_openssl_SOURCE_DIR}/android_openssl.cmake")
         include("${android_openssl_SOURCE_DIR}/android_openssl.cmake")
         add_android_openssl_libraries(appHogrin)
     endif()
-
     set_target_properties(appHogrin PROPERTIES
         QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/android"
         QT_ANDROID_MIN_SDK_VERSION 26
@@ -117,10 +110,7 @@ endif()
 # ── Desktop Deployment ────────────────────────
 if(NOT ANDROID)
     include(GNUInstallDirs)
-    install(TARGETS appHogrin
-        BUNDLE  DESTINATION .
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    )
+    install(TARGETS appHogrin BUNDLE DESTINATION . RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     qt_generate_deploy_qml_app_script(TARGET appHogrin OUTPUT_SCRIPT deploy_script NO_UNSUPPORTED_PLATFORM_ERROR)
     install(SCRIPT ${deploy_script})
 endif()

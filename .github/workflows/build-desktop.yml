@@ -18,6 +18,11 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11' # Це зафіксить помилку Python 3.12 в Actions
+
     - name: Install Dependencies (Linux)
       if: matrix.os == 'ubuntu-latest'
       run: |
@@ -25,7 +30,7 @@ jobs:
         sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev ninja-build
 
     - name: Install Qt
-      uses: jurplel/install-qt-action@v4
+      uses: jurplel/install-qt-action@v3 # Використовуємо стабільну v3
       with:
         version: '6.8.2'
         modules: 'qtnetworkauth qt5compat qtnetworkinformation'
