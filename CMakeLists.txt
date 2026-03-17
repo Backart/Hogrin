@@ -21,11 +21,12 @@ FetchContent_Declare(
 )
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(libsodium)
-set(SODIUM_LINK_TARGET sodium)
 
 # ── Sources ───────────────────────────────────────────────────────────────────
 
-add_library(HogrinBackend STATIC
+# Просто створюємо список всіх твоїх C++ файлів
+set(HOGRIN_SOURCES
+    src/app/main.cpp
     src/network/include/network_manager.h
     src/network/src/network_manager.cpp
     src/network/include/tcp_connection.h
@@ -46,29 +47,10 @@ add_library(HogrinBackend STATIC
     src/updater/update_checker.cpp
 )
 
-target_link_libraries(HogrinBackend PUBLIC
-    Qt6::Core
-    Qt6::Network
-    Qt6::Sql
-    Qt6::Qml
-    ${SODIUM_LINK_TARGET}
-    $<$<TARGET_EXISTS:Qt6::NetworkInformation>:Qt6::NetworkInformation>
-)
+# Створюємо ОДИН виконуваний файл з усіма вихідниками
+qt_add_executable(appHogrin ${HOGRIN_SOURCES})
 
-target_include_directories(HogrinBackend PUBLIC
-    src/app
-    src/core/include
-    src/network/include
-    src/crypto/include
-    src/common
-    src/db/include
-    src/updater
-)
-
-qt_add_executable(appHogrin
-    src/app/main.cpp
-)
-
+# Додаємо QML модуль прямо до цього файлу
 qt_add_qml_module(appHogrin
     URI Hogrin
     VERSION 1.0
@@ -92,66 +74,54 @@ qt_add_qml_module(appHogrin
 
 # ── Link libraries ────────────────────────────────────────────────────────────
 
+# Лінкуємо все ОДНИМ блоком. Це гарантує правильний порядок для MinGW.
 target_link_libraries(appHogrin PRIVATE
-    HogrinBackend
     Qt6::Core
     Qt6::Gui
     Qt6::Quick
     Qt6::Network
     Qt6::Sql
     Qt6::Qml
+    sodium
+    $<$<TARGET_EXISTS:Qt6::NetworkInformation>:Qt6::NetworkInformation>
+)
+
+target_include_directories(appHogrin PRIVATE
+    src/app
+    src/core/include
+    src/network/include
+    src/crypto/include
+    src/common
+    src/db/include
+    src/updater
 )
 
 if(TARGET Qt6::NetworkInformation)
-    target_compile_definitions(HogrinBackend PRIVATE HAS_QT_NETWORK_INFORMATION)
-    message(STATUS "Qt6::NetworkInformation found — network change detection enabled")
-else()
-    message(STATUS "Qt6::NetworkInformation NOT found — network change detection disabled")
+    target_compile_definitions(appHogrin PRIVATE HAS_QT_NETWORK_INFORMATION)
 endif()
 
-# ── Android ───────────────────────────────────────────────────────────────────
+# ── Android (без змін) ────────────────────────────────────────────────────────
 if(ANDROID)
     find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
     target_link_libraries(appHogrin PRIVATE Qt6::CorePrivate)
-
     include(FetchContent)
-    FetchContent_Declare(
-        android_openssl
-        GIT_REPOSITORY https://github.com/KDAB/android_openssl.git
-        GIT_TAG        master
-    )
+    FetchContent_Declare(android_openssl GIT_REPOSITORY https://github.com/KDAB/android_openssl.git GIT_TAG master)
     FetchContent_MakeAvailable(android_openssl)
-
-    message(STATUS "android_openssl SOURCE_DIR: ${android_openssl_SOURCE_DIR}")
-
     if(EXISTS "${android_openssl_SOURCE_DIR}/android_openssl.cmake")
         include("${android_openssl_SOURCE_DIR}/android_openssl.cmake")
         add_android_openssl_libraries(appHogrin)
-    else()
-        message(WARNING "android_openssl.cmake not found — OpenSSL will be missing on Android")
     endif()
-
     set_target_properties(appHogrin PROPERTIES
         QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/android"
-        QT_ANDROID_MIN_SDK_VERSION    26
+        QT_ANDROID_MIN_SDK_VERSION 26
         QT_ANDROID_TARGET_SDK_VERSION 34
     )
 endif()
-# ── Desktop Deployment (Windows, macOS, Linux) ────────────────────────────────
 
+# ── Desktop Deployment ────────────────────────────────────────────────────────
 if(NOT ANDROID)
     include(GNUInstallDirs)
-
-    install(TARGETS appHogrin
-        BUNDLE  DESTINATION .
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    )
-
-    qt_generate_deploy_qml_app_script(
-        TARGET appHogrin
-        OUTPUT_SCRIPT deploy_script
-        NO_UNSUPPORTED_PLATFORM_ERROR
-    )
-
+    install(TARGETS appHogrin BUNDLE DESTINATION . RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    qt_generate_deploy_qml_app_script(TARGET appHogrin OUTPUT_SCRIPT deploy_script NO_UNSUPPORTED_PLATFORM_ERROR)
     install(SCRIPT ${deploy_script})
 endif()
