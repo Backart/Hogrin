@@ -11,26 +11,18 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network Sql)
 find_package(Qt6 OPTIONAL_COMPONENTS NetworkInformation)
 qt_policy(SET QTP0004 NEW)
 
-# ── libsodium ─────────────────────────────────────────────────────────────────
-find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND AND NOT ANDROID)
-    pkg_check_modules(sodium QUIET IMPORTED_TARGET libsodium)
-endif()
-
-if(sodium_FOUND)
-    message(STATUS "Using system libsodium")
-    set(SODIUM_LINK_TARGET PkgConfig::sodium)
-else()
-    message(STATUS "libsodium not found or Android — fetching from source")
-    include(FetchContent)
-    FetchContent_Declare(
-        libsodium
-        GIT_REPOSITORY https://github.com/robinlinden/libsodium-cmake.git
-        GIT_TAG        master
-    )
-    FetchContent_MakeAvailable(libsodium)
-    set(SODIUM_TARGET sodium)
-endif()
+# ── libsodium (FetchContent для всіх платформ) ─────────────────────────────────
+message(STATUS "Fetching libsodium from source...")
+include(FetchContent)
+FetchContent_Declare(
+    libsodium
+    GIT_REPOSITORY https://github.com/robinlinden/libsodium-cmake.git
+    GIT_TAG        master
+)
+# Вимикаємо тести libsodium, щоб збірка була блискавичною (не чекати 493 кроки!)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(libsodium)
+set(SODIUM_LINK_TARGET sodium)
 
 # ── Sources ───────────────────────────────────────────────────────────────────
 qt_add_executable(appHogrin
@@ -85,7 +77,7 @@ target_link_libraries(appHogrin PRIVATE
     Qt6::Network
     Qt6::Sql
     $<$<TARGET_EXISTS:Qt6::NetworkInformation>:Qt6::NetworkInformation>
-    $<IF:$<BOOL:${sodium_FOUND}>,${sodium_LIBRARIES},${SODIUM_TARGET}>
+    ${SODIUM_LINK_TARGET}
 )
 
 target_include_directories(appHogrin PRIVATE
@@ -149,6 +141,5 @@ if(NOT ANDROID)
         NO_UNSUPPORTED_PLATFORM_ERROR
     )
 
-    # 3. Запускаємо цей скрипт
     install(SCRIPT ${deploy_script})
 endif()
