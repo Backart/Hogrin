@@ -12,7 +12,6 @@ find_package(Qt6 OPTIONAL_COMPONENTS NetworkInformation)
 qt_policy(SET QTP0004 NEW)
 
 # ── libsodium (FetchContent) ──────────────────
-message(STATUS "Fetching libsodium from source...")
 include(FetchContent)
 FetchContent_Declare(
     libsodium
@@ -23,35 +22,43 @@ set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(libsodium)
 
 # ── Sources ───────────────────────────────────
-set(HOGRIN_SOURCES
+set(PROJECT_SOURCES
     src/app/main.cpp
+    # Network
     src/network/include/network_manager.h
     src/network/src/network_manager.cpp
     src/network/include/tcp_connection.h
     src/network/src/tcp_connection.cpp
     src/network/include/bootstrap_client.h
     src/network/src/bootstrap_client.cpp
+    # Core
     src/core/include/messenger_core.h
     src/core/src/messenger_core.cpp
+    # UI Backend
     src/ui/backend/ui_handler.h
     src/ui/backend/ui_handler.cpp
-    src/common/types.h
-    src/common/config.h
+    # Crypto
     src/crypto/include/crypto_manager.h
     src/crypto/src/crypto_manager.cpp
+    # DB
     src/db/include/local_db.h
     src/db/src/local_db.cpp
+    # Updater
     src/updater/update_checker.h
     src/updater/update_checker.cpp
+    # Common
+    src/common/types.h
+    src/common/config.h
 )
 
-qt_add_executable(appHogrin ${HOGRIN_SOURCES})
+qt_add_executable(appHogrin ${PROJECT_SOURCES})
 
 qt_add_qml_module(appHogrin
     URI Hogrin
     VERSION 1.0
     RESOURCE_PREFIX /qt/qml
-    RESOURCES assets/fonts/NotoEmoji-Regular.ttf
+    RESOURCES
+        assets/fonts/NotoEmoji-Regular.ttf
     QML_FILES
         src/ui/qml/Main.qml
         src/ui/qml/components/Style.qml
@@ -67,16 +74,9 @@ qt_add_qml_module(appHogrin
         src/ui/qml/components/AuthScreen.qml
 )
 
-# ── Linking (Фінальна формула для Windows) ────
-
-# Ми використовуємо PUBLIC, щоб Qt був доступний навіть автозгенерованому коду QML
-target_link_libraries(appHogrin PUBLIC
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Quick
-    Qt6::Network
-    Qt6::Sql
-    Qt6::Qml
+# ── Linking ───────────────────────────────────
+target_link_libraries(appHogrin PRIVATE
+    Qt6::Core Qt6::Gui Qt6::Quick Qt6::Network Qt6::Sql Qt6::Qml
     sodium
     $<$<TARGET_EXISTS:Qt6::NetworkInformation>:Qt6::NetworkInformation>
 )
@@ -95,17 +95,18 @@ if(TARGET Qt6::NetworkInformation)
     target_compile_definitions(appHogrin PRIVATE HAS_QT_NETWORK_INFORMATION)
 endif()
 
-# ── Android ───────────────────────────────────
+# ── Android Specific ─────────────────────────
 if(ANDROID)
     find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
     target_link_libraries(appHogrin PRIVATE Qt6::CorePrivate)
-    include(FetchContent)
+
     FetchContent_Declare(android_openssl GIT_REPOSITORY https://github.com/KDAB/android_openssl.git GIT_TAG master)
     FetchContent_MakeAvailable(android_openssl)
     if(EXISTS "${android_openssl_SOURCE_DIR}/android_openssl.cmake")
         include("${android_openssl_SOURCE_DIR}/android_openssl.cmake")
         add_android_openssl_libraries(appHogrin)
     endif()
+
     set_target_properties(appHogrin PROPERTIES
         QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/android"
         QT_ANDROID_MIN_SDK_VERSION 26
@@ -116,7 +117,10 @@ endif()
 # ── Desktop Deployment ────────────────────────
 if(NOT ANDROID)
     include(GNUInstallDirs)
-    install(TARGETS appHogrin BUNDLE DESTINATION . RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(TARGETS appHogrin
+        BUNDLE  DESTINATION .
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
     qt_generate_deploy_qml_app_script(TARGET appHogrin OUTPUT_SCRIPT deploy_script NO_UNSUPPORTED_PLATFORM_ERROR)
     install(SCRIPT ${deploy_script})
 endif()
