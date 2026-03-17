@@ -97,6 +97,9 @@ target_link_libraries(appHogrin PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Quick
+    Qt6::Network
+    Qt6::Sql
+    Qt6::Qml
 )
 
 if(TARGET Qt6::NetworkInformation)
