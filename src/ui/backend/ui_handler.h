@@ -48,6 +48,8 @@ signals:
     void message_received(QString username, QString text, QDateTime time);
     void session_restored(QString nickname);
 
+    void peer_status_changed(QString nickname, bool isOnline);
+
     void peer_found(QString host, quint16 port);
     void peer_not_found();
 

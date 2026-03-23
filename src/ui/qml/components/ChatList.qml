@@ -18,6 +18,7 @@ Rectangle {
                                      "nickname": peers[i],
                                      "isOnline": false
                                  })
+            backend.find_peer(peers[i])
         }
     }
 
@@ -98,37 +99,46 @@ Rectangle {
 
                 ListModel { id: contactsModel }
 
+                Timer {
+                    interval: 8000
+                    running: true
+                    repeat: true
+                    onTriggered: {
+                        for (let i = 0; i < contactsModel.count; ++i) {
+                            backend.find_peer(contactsModel.get(i).nickname)
+                        }
+                    }
+                }
+
                 Connections {
                     target: backend
 
-                    function onPeer_found(host, port) {
-                        let foundName = searchField.text.trim() || root.activeChatUser
-
+                    function onPeer_status_changed(nickname, isOnline) {
                         let exists = false;
+
                         for (let i = 0; i < contactsModel.count; ++i) {
-                            if (contactsModel.get(i).nickname === foundName) {
-                                contactsModel.setProperty(i, "isOnline", true)
+                            if (contactsModel.get(i).nickname === nickname) {
+                                contactsModel.setProperty(i, "isOnline", isOnline);
                                 exists = true;
                                 break;
                             }
                         }
 
-                        if (!exists) {
+                        if (!exists && isOnline) {
                             contactsModel.append({
-                                                     "nickname": foundName,
+                                                     "nickname": nickname,
                                                      "isOnline": true
-                                                 })
+                                                 });
                         }
 
-                        root.activeChatUser = foundName
-                        searchToast.statusText = ""
+                        if (searchField.text.trim() === nickname) {
+                            searchToast.searchSuccess = isOnline;
+                            searchToast.statusText = isOnline ? "" : "Not found";
+                        }
                     }
 
-                    function onPeer_not_found() {
-                        contactsModel.clear()
-                        searchToast.searchSuccess = false
-                        searchToast.statusText = "Not found"
-                    }
+                    function onPeer_found(host, port) {}
+                    function onPeer_not_found() {}
                 }
 
                 ColumnLayout {

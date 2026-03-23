@@ -5,6 +5,23 @@ import QtQuick.Layouts
 Rectangle {
     id: chatArea
     color: theme.bgMain
+    property bool isPeerOnline: false
+
+    Connections {
+        target: backend
+        function onPeer_status_changed(nickname, isOnline) {
+            if (nickname === root.activeChatUser) {
+                chatArea.isPeerOnline = isOnline
+            }
+        }
+    }
+
+    Connections {
+        target: root
+        function onActiveChatUserChanged() {
+            chatArea.isPeerOnline = false
+        }
+    }
 
     // ── Toast notification ───────────────────────────────────
     property string toastText: ""
@@ -127,15 +144,21 @@ Rectangle {
                     Row {
                         spacing: 5
                         Rectangle {
-                            width: 7; height: 7; radius: 4; color: theme.online
+                            width: 7; height: 7; radius: 4;
+                            color: chatArea.isPeerOnline ? theme.online : theme.textMuted
                             anchors.verticalCenter: parent.verticalCenter
                             SequentialAnimation on opacity {
+                                running: chatArea.isPeerOnline
                                 loops: Animation.Infinite
                                 NumberAnimation { from: 1.0; to: 0.4; duration: 1200; easing.type: Easing.InOutSine }
                                 NumberAnimation { from: 0.4; to: 1.0; duration: 1200; easing.type: Easing.InOutSine }
                             }
+                            opacity: chatArea.isPeerOnline ? 1.0 : 0.5
                         }
-                        Text { text: "online"; font.pixelSize: 11; color: theme.textSecondary }
+                        Text {
+                            text: chatArea.isPeerOnline ? "online" : "offline"
+                            font.pixelSize: 11; color: theme.textSecondary
+                        }
                     }
                 }
             }
@@ -221,9 +244,9 @@ Rectangle {
                 text: {
                     if (chatModel.count === 0) return ""
                     let idx = messageList.indexAt(
-                        messageList.contentX + messageList.width / 2,
-                        messageList.contentY + 1
-                    )
+                            messageList.contentX + messageList.width / 2,
+                            messageList.contentY + 1
+                            )
                     if (idx < 0) idx = 0
                     let item = chatModel.get(idx)
                     if (!item || !item.timestamp) return ""
@@ -375,13 +398,13 @@ Rectangle {
         const me   = root.currentUsername
         const peer = root.activeChatUser
         chatModel.append({
-            "senderName":  me,
-            "messageText": txt,
-            "isMe":        true,
-            "msgTime":     Qt.formatDateTime(new Date(), "hh:mm"),
-            "timestamp":   Math.floor(Date.now() / 1000),
-            "is_outgoing": true
-        })
+                             "senderName":  me,
+                             "messageText": txt,
+                             "isMe":        true,
+                             "msgTime":     Qt.formatDateTime(new Date(), "hh:mm"),
+                             "timestamp":   Math.floor(Date.now() / 1000),
+                             "is_outgoing": true
+                         })
         backend.send_message_from_ui(peer, txt)
         chatInput.text = ""
     }

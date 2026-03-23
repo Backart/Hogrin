@@ -10,12 +10,14 @@ UI_Handler::UI_Handler(Messenger_Core *core,QObject *parent)
             });
 
     connect(m_core, &Messenger_Core::peer_found,
-            this, [this](const QString &, const QString &host, quint16 port){
+            this, [this](const QString &nickname, const QString &host, quint16 port){
+                emit peer_status_changed(nickname, true);
                 emit peer_found(host, port);
             });
 
     connect(m_core, &Messenger_Core::peer_not_found,
-            this, [this](const QString &){
+            this, [this](const QString &nickname){
+                emit peer_status_changed(nickname, false);
                 emit peer_not_found();
             });
 
