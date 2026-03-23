@@ -24,7 +24,7 @@ if(NOT sodium_FOUND)
     FetchContent_Declare(
         libsodium
         GIT_REPOSITORY https://github.com/robinlinden/libsodium-cmake.git
-        GIT_TAG        e003102
+        GIT_TAG        master
     )
     FetchContent_MakeAvailable(libsodium)
     set(SODIUM_TARGET sodium)

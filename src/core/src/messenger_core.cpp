@@ -25,6 +25,10 @@ Messenger_Core::Messenger_Core(QObject *parent)
                     qDebug() << "Shared secret computed for incoming P2P from:" << peer_nickname;
 
                     m_peer_state[peer_nickname].relay_mode = false;
+
+                    m_relay_mode = false;
+                    emit peer_found(peer_nickname, "", 0);
+
                     m_pending_peer = peer_nickname;
                     try_decrypt_pending();
 
@@ -66,6 +70,15 @@ Messenger_Core::Messenger_Core(QObject *parent)
                     QByteArray decrypted = crypto->decrypt(encrypted);
 
                     if (!decrypted.isEmpty()) {
+
+                        if (!m_peer_state[sender_nick].relay_mode) {
+                            qDebug() << "Detected relay msg -> switching to relay mode.";
+                            m_peer_state[sender_nick].relay_mode = true;
+                            m_relay_mode = true;
+                            m_network->disconnect_from_host();
+                            emit relay_mode_activated();
+                        }
+
                         DataPacket packet = deserialize_packet(decrypted);
                         auto it = m_handlers.find(packet.type);
                         if (it != m_handlers.end()) it->second(packet);

@@ -24,7 +24,7 @@ bool Local_DB::init(const QString &nickname)
     QDir().mkpath(dir_path);
     QString db_path = dir_path + "/" + nickname + ".db";
 
-    m_connection_name = "local_db_" + nickname;  // уникальное имя
+    m_connection_name = "local_db_" + nickname;
     m_db = QSqlDatabase::addDatabase("QSQLITE", m_connection_name);
     m_db.setDatabaseName(db_path);
 
