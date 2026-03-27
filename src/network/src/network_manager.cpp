@@ -19,13 +19,14 @@ bool Network_Manager::start_server(quint16 port){
     return false;
 }
 
-void Network_Manager::connect_to_host(const QString &host,
+void Network_Manager::connect_to_host(const QString &peer_nickname,
+                                      const QString &host,
                                       quint16 port,
                                       const QByteArray &my_pub_key)
 {
     if (m_skip_p2p) {
         qDebug() << "NAT/CGNAT detected — skipping P2P attempt, going relay";
-        emit p2p_failed();
+        emit p2p_failed(peer_nickname);
         return;
     }
 
@@ -57,23 +58,17 @@ void Network_Manager::connect_to_host(const QString &host,
             });
 
     connect(timeout, &QTimer::timeout,
-            this, [this, safe_socket, safe_connection, timeout]() {
+            this, [this, safe_socket, safe_connection, timeout, peer_nickname]() {
                 qDebug() << "P2P connection timeout — fallback to relay";
 
-                if (timeout) {
-                    timeout->deleteLater();
-                }
-
+                if (timeout) timeout->deleteLater();
                 if (safe_connection) {
                     m_connections.removeAll(safe_connection);
                     safe_connection->deleteLater();
                 }
+                if (safe_socket) safe_socket->abort();
 
-                if (safe_socket) {
-                    safe_socket->abort();
-                }
-
-                emit p2p_failed();
+                emit p2p_failed(peer_nickname);
             });
 
     connect(connection, &Tcp_Connection::dataReceived,

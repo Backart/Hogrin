@@ -6,6 +6,7 @@ Messenger_Core::Messenger_Core(QObject *parent)
     , m_bootstrap(new Bootstrap_Client(this))
     , m_poll_timer(new QTimer(this))
     , m_local_db(new Local_DB(this))
+    , m_identity_crypto(new Crypto_Manager())
 {
     setup_handlers();
 
@@ -14,6 +15,11 @@ Messenger_Core::Messenger_Core(QObject *parent)
 
     connect(m_network, &Network_Manager::p2p_failed,
             this, &Messenger_Core::on_p2p_failed);
+
+    m_p2p_retry_timer = new QTimer(this);
+    connect(m_p2p_retry_timer, &QTimer::timeout,
+            this, &Messenger_Core::retry_p2p_connections);
+    m_p2p_retry_timer->start(5 * 60 * 1000);
 
     connect(m_network, &Network_Manager::incoming_peer_authenticated,
             this, [this](const QString &peer_nickname, const QByteArray &peer_pub_key) {
@@ -27,9 +33,8 @@ Messenger_Core::Messenger_Core(QObject *parent)
                     m_peer_state[peer_nickname].relay_mode = false;
 
                     m_relay_mode = false;
-                    emit peer_found(peer_nickname, "", 0);
+                    emit peer_found(peer_nickname, "", 0, false);
 
-                    m_pending_peer = peer_nickname;
                     try_decrypt_pending();
 
                     if (m_local_db->has_pending(peer_nickname)) {
@@ -65,8 +70,11 @@ Messenger_Core::Messenger_Core(QObject *parent)
 
                     Crypto_Manager *crypto = crypto_for(sender_nick);
 
-                    crypto->set_identity(*m_identity_crypto);
-                    crypto->compute_shared_secret(peer_pubkey);
+                    if (!crypto->is_ready()) {
+                        crypto->set_identity(*m_identity_crypto);
+                        crypto->compute_shared_secret(peer_pubkey);
+                    }
+
                     QByteArray decrypted = crypto->decrypt(encrypted);
 
                     if (!decrypted.isEmpty()) {
@@ -157,7 +165,6 @@ Messenger_Core::Messenger_Core(QObject *parent)
     connect(m_bootstrap, &Bootstrap_Client::auth_verify_success,
             this, [this](const QString &nickname) {
                 set_current_nickname(nickname);
-                // FIX: use RELAY_POLL_INTERVAL_MS, not hardcoded 1000
                 m_poll_timer->start(Config::RELAY_POLL_INTERVAL_MS);
                 emit verify_completed(true, nickname);
             });
@@ -307,7 +314,6 @@ void Messenger_Core::send_message(const QString &peer, const QString &text)
         return;
     }
 
-    m_pending_peer = peer;
 
     QByteArray payload;
     QDataStream stream(&payload, QIODevice::WriteOnly);
@@ -360,9 +366,9 @@ bool Messenger_Core::start_server(quint16 port)
     return ok;
 }
 
-void Messenger_Core::connect_to_host(const QString &host, quint16 port)
+void Messenger_Core::connect_to_host(const QString &peer_nickname, const QString &host, quint16 port)
 {
-    m_network->connect_to_host(host, port, m_identity_crypto->public_key());
+    m_network->connect_to_host(peer_nickname, host, port, m_identity_crypto->public_key());
 }
 
 // ── auth ─────────────────────────────────────────────────────────────────────
@@ -417,18 +423,26 @@ void Messenger_Core::on_peer_found(const QString &nickname,
 {
     m_local_db->save_contact_key(nickname, peer_public_key);
 
-    m_pending_peer = nickname;
-    m_peer_state[nickname].relay_mode = false;
-    m_relay_mode = false;
-
     Crypto_Manager *crypto = crypto_for(nickname);
-    crypto->set_identity(*m_identity_crypto);
 
-    if (!crypto->compute_shared_secret(peer_public_key)) {
-        qWarning() << "Failed to compute shared secret for:" << nickname;
-    } else {
-        qDebug() << "Shared secret computed immediately for:" << nickname;
-        try_decrypt_pending();
+    if (!crypto->is_ready()) {
+        crypto->set_identity(*m_identity_crypto);
+        if (!crypto->compute_shared_secret(peer_public_key)) {
+            qWarning() << "Failed to compute shared secret for:" << nickname;
+            return;
+        } else {
+            qDebug() << "Shared secret computed immediately for:" << nickname;
+            try_decrypt_pending();
+        }
+    }
+
+    if (m_peer_state[nickname].relay_mode) {
+        emit peer_found(nickname, host, port, m_peer_state[nickname].relay_mode);
+        return;
+    }
+
+    if (!m_network->has_connections()) {
+        m_network->connect_to_host(nickname, host, port, m_identity_crypto->public_key());
     }
 
     if (m_local_db->has_pending(nickname)) {
@@ -443,20 +457,16 @@ void Messenger_Core::on_peer_found(const QString &nickname,
                 qWarning() << "Cannot send pending message: crypto is not ready!";
             }
         }
-
         m_local_db->confirm_outbox(nickname);
     }
-
-    if (!m_network->has_connections()) {
-        m_network->connect_to_host(host, port, m_identity_crypto->public_key());
-    }
-    emit peer_found(nickname, host, port);
+    emit peer_found(nickname, host, port, m_peer_state[nickname].relay_mode);
 }
 
-void Messenger_Core::on_p2p_failed()
+void Messenger_Core::on_p2p_failed(const QString &peer_nickname)
 {
-    qDebug() << "P2P failed for" << m_pending_peer << "— switching to relay";
-    m_peer_state[m_pending_peer].relay_mode = true;
+    qDebug() << "P2P failed for" << peer_nickname << "— switching to relay";
+
+    m_peer_state[peer_nickname].relay_mode = true;
     m_relay_mode = true;
 
     m_poll_timer->start(Config::RELAY_POLL_INTERVAL_MS);
@@ -478,9 +488,6 @@ void Messenger_Core::set_current_nickname(const QString &nickname)
 {
     m_current_nickname = nickname;
     m_network->set_nickname(nickname);
-
-    if (!m_identity_crypto)
-        m_identity_crypto = new Crypto_Manager();
 
     if (!m_local_db->init(nickname)) {
         qWarning() << "Local_DB init failed for:" << nickname;
@@ -536,4 +543,29 @@ void Messenger_Core::try_decrypt_pending()
         }
     }
     m_undecryptable_messages = remaining;
+}
+
+void Messenger_Core::retry_p2p_connections()
+{
+    if (m_current_nickname.isEmpty()) return;
+
+    bool retry_started = false;
+
+    for (auto it = m_peer_state.begin(); it != m_peer_state.end(); ++it) {
+        const QString &peer = it.key();
+
+        if (it.value().relay_mode) {
+            qDebug() << "Initiating 5-minute P2P retry for:" << peer;
+
+            it.value().relay_mode = false;
+            m_relay_mode = false;
+
+            m_bootstrap->find_user(peer);
+            retry_started = true;
+        }
+    }
+
+    if (retry_started) {
+        qDebug() << "P2P retry cycle started. If it fails, peers will fallback to relay automatically.";
+    }
 }

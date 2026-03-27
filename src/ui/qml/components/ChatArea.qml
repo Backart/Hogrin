@@ -6,12 +6,15 @@ Rectangle {
     id: chatArea
     color: theme.bgMain
     property bool isPeerOnline: false
+    property bool isRelayMode: false
 
     Connections {
         target: backend
-        function onPeer_status_changed(nickname, isOnline) {
+
+        function onPeer_status_changed(nickname, isOnline, isRelay) {
             if (nickname === root.activeChatUser) {
                 chatArea.isPeerOnline = isOnline
+                chatArea.isRelayMode = isRelay
             }
         }
     }
@@ -165,26 +168,34 @@ Rectangle {
 
             Item { Layout.fillWidth: true }
 
+
             // ── Connection mode badge ──
             Rectangle {
                 visible: root.activeChatUser !== undefined && root.activeChatUser !== ""
-                height: 22
-                width: connModeLabel.implicitWidth + 14
+
+                Layout.preferredHeight: 22
+                Layout.preferredWidth: connModeLabel.implicitWidth + 20
+
                 radius: 11
-                color: (backend ? backend.connectionMode : "--") === "P2P" ? "#1A3A2A" : "#2A1A3A"
+                color: !chatArea.isPeerOnline ? "transparent" : (chatArea.isRelayMode ? "#2A1A3A" : "#1A3A2A")
+
+                border.color: !chatArea.isPeerOnline ? theme.border : "transparent"
+                border.width: 1
+
                 Behavior on color { ColorAnimation { duration: 300 } }
+                Behavior on border.color { ColorAnimation { duration: 300 } }
 
                 Text {
                     id: connModeLabel
                     anchors.centerIn: parent
-                    // показываем всегда полный текст
-                    text: backend ? backend.connectionMode : "--"
+                    text: !chatArea.isPeerOnline ? "---" : (chatArea.isRelayMode ? "Relay e2ee IPv6" : "P2P e2ee IPv6")
                     font.pixelSize: 10
                     font.weight: Font.Bold
-                    color: (backend ? backend.connectionMode : "--") === "P2P" ? "#3DD68C" : "#A07CF5"
+                    color: !chatArea.isPeerOnline ? theme.textSecondary : (chatArea.isRelayMode ? "#A07CF5" : "#3DD68C")
                     Behavior on color { ColorAnimation { duration: 300 } }
                 }
             }
+
         }
     }
 

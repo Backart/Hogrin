@@ -17,7 +17,7 @@ public:
 
     Q_INVOKABLE void send_message_from_ui(const QString &username, const QString &text);
     Q_INVOKABLE bool start_server(quint16 port);
-    Q_INVOKABLE void connect_to_host(const QString &host, quint16 port);
+    Q_INVOKABLE void connect_to_host(const QString &peer_nickname, const QString &host, quint16 port);
 
     Q_INVOKABLE void register_user(const QString &nickname, const QString &password);
     Q_INVOKABLE void login_user(const QString &nickname, const QString &password);
@@ -35,20 +35,15 @@ public:
 
     quint16 get_listening_port() const;
 
-    Q_PROPERTY(QString connectionMode READ connectionMode NOTIFY connectionModeChanged)
-    QString connectionMode() const { return m_connection_mode; }
-
 private:
 
     Messenger_Core *m_core;
-
-    QString m_connection_mode = "—";
 
 signals:
     void message_received(QString username, QString text, QDateTime time);
     void session_restored(QString nickname);
 
-    void peer_status_changed(QString nickname, bool isOnline);
+    void peer_status_changed(QString nickname, bool isOnline, bool isRelay);
 
     void peer_found(QString host, quint16 port);
     void peer_not_found();
@@ -57,18 +52,6 @@ signals:
 
     void login_result(bool success, const QString &error);
     void register_result(bool success, const QString &error);
-
-    void connectionModeChanged();
-
-public slots:
-    void onRelayModeActivated() {
-        m_connection_mode = "Relay e2ee IPv6";
-        emit connectionModeChanged();
-    }
-    void onPeerFound(const QString&, const QString&, quint16) {
-        m_connection_mode = "P2P e2ee IPv6";
-        emit connectionModeChanged();
-    }
 
 
 

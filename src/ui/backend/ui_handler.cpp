@@ -10,14 +10,14 @@ UI_Handler::UI_Handler(Messenger_Core *core,QObject *parent)
             });
 
     connect(m_core, &Messenger_Core::peer_found,
-            this, [this](const QString &nickname, const QString &host, quint16 port){
-                emit peer_status_changed(nickname, true);
+            this, [this](const QString &nickname, const QString &host, quint16 port, bool is_relay){
+                emit peer_status_changed(nickname, true, is_relay);
                 emit peer_found(host, port);
             });
 
     connect(m_core, &Messenger_Core::peer_not_found,
             this, [this](const QString &nickname){
-                emit peer_status_changed(nickname, false);
+                emit peer_status_changed(nickname, false, false);
                 emit peer_not_found();
             });
 
@@ -51,12 +51,6 @@ UI_Handler::UI_Handler(Messenger_Core *core,QObject *parent)
                 }
             });
 
-    connect(m_core, &Messenger_Core::relay_mode_activated,
-            this, &UI_Handler::onRelayModeActivated);
-    connect(m_core, &Messenger_Core::peer_found,
-            this, [this](const QString&, const QString&, quint16){
-                onPeerFound("","",0);
-            });
 }
 
 void UI_Handler::send_message_from_ui(const QString &username, const QString &text){
@@ -67,8 +61,9 @@ bool UI_Handler::start_server(quint16 port){
     return m_core->start_server(port);
 }
 
-void UI_Handler::connect_to_host(const QString &host, quint16 port){
-    m_core->connect_to_host(host, port);
+void UI_Handler::connect_to_host(const QString &peer_nickname, const QString &host, quint16 port)
+{
+    m_core->connect_to_host(peer_nickname, host, port);
 }
 
 void UI_Handler::register_user(const QString &nickname, const QString &password)

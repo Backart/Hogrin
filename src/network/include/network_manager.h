@@ -19,7 +19,8 @@ class Network_Manager : public QObject {
 public:
     explicit Network_Manager(QObject *parent = nullptr);
 
-    void connect_to_host(const QString &host,
+    void connect_to_host(const QString &peer_nickname,
+                         const QString &host,
                          quint16 port,
                          const QByteArray &my_pub_key);
     bool start_server(quint16 port);
@@ -40,7 +41,7 @@ signals:
     void disconnected();
     void data_received(const QByteArray &data);
 
-    void p2p_failed();
+    void p2p_failed(const QString &peer_nickname);
     void incoming_peer_authenticated(const QString &peer_nickname, const QByteArray &peer_pub_key);
     void all_connections_lost();
 

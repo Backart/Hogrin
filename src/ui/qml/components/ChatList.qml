@@ -113,7 +113,7 @@ Rectangle {
                 Connections {
                     target: backend
 
-                    function onPeer_status_changed(nickname, isOnline) {
+                    function onPeer_status_changed(nickname, isOnline, isRelay) {
                         let exists = false;
 
                         for (let i = 0; i < contactsModel.count; ++i) {
@@ -404,6 +404,12 @@ Rectangle {
                             spacing: 10
 
                             ModernField {
+                                id: targetPeerField
+                                Layout.fillWidth: true
+                                placeholderText: "Peer Nickname"
+                            }
+
+                            ModernField {
                                 id: ipField
                                 Layout.fillWidth: true
                                 placeholderText: "Host IP"
@@ -428,7 +434,7 @@ Rectangle {
                                 AccentButton {
                                     text: "Join"
                                     Layout.fillWidth: true
-                                    onClicked: backend.connect_to_host(ipField.text, parseInt(portField.text))
+                                    onClicked: backend.connect_to_host(targetPeerField.text, ipField.text, parseInt(portField.text))
                                 }
                             }
                         }

@@ -34,7 +34,7 @@ public:
 
     void send_message(const QString &text, const QString &username);
     bool start_server(quint16 port);
-    void connect_to_host(const QString &host, quint16 port);
+    void connect_to_host(const QString &peer_nickname, const QString &host, quint16 port);
 
     void auth_register(const QString &nickname, const QString &password);
     void auth_login(const QString &nickname, const QString &password);
@@ -60,7 +60,12 @@ public:
 signals:
 
     void message_received(const QString &text, const QString &username);
-    void peer_found(const QString &nickname, const QString &host, quint16 port);
+
+    void peer_found(const QString &nickname,
+                    const QString &host,
+                    quint16 port,
+                    bool is_relay);
+
     void peer_not_found(const QString &nickname);
 
     void relay_mode_activated();
@@ -76,8 +81,10 @@ private slots:
                        const QString &host,
                        quint16 port,
                        const QByteArray &peer_public_key);
-    void on_p2p_failed();
+    void on_p2p_failed(const QString &peer_nickname);
     void poll_relay_messages();
+
+    void retry_p2p_connections();
 
 private:
 
@@ -97,7 +104,6 @@ private:
 
     QTimer  *m_poll_timer;
     QString  m_current_nickname;
-    QString  m_pending_peer;
     bool     m_relay_mode = false;
 
     Local_DB *m_local_db;
@@ -107,6 +113,8 @@ private:
 
     QList<QByteArray> m_undecryptable_messages;
     void try_decrypt_pending();
+
+    QTimer *m_p2p_retry_timer;
 
 };
 
