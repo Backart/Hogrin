@@ -120,4 +120,4 @@ android/            # AndroidManifest, FileProvider config
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2025 Backart
+[GPL v2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt)— Copyright (c) 2025 Backart
