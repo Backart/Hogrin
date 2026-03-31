@@ -44,8 +44,8 @@ jobs:
       - name: Package macOS (DMG)
         if: matrix.os == 'macos-latest'
         run: |
-          macdeployqt dist/appHogrin.app -qmldir=src/ui/qml -dmg
-          mv dist/appHogrin.dmg Hogrin-macOS.dmg
+          macdeployqt build/appHogrin.app -qmldir=src/ui/qml -dmg
+          mv build/appHogrin.dmg Hogrin-macOS.dmg
 
       - name: Upload Artifacts (macOS)
         if: matrix.os == 'macos-latest'
