@@ -72,7 +72,7 @@ qt_add_executable(appHogrin
 )
 
 # ── QML Module ────────────────────────────────────────────────────────────────
-qt_add_qml_module(appHogrin
+qt_add_qml_module(appHogrin MACOSX_BUNDLE
     URI Hogrin
     VERSION 1.0
     RESOURCE_PREFIX /qt/qml
