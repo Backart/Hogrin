@@ -62,7 +62,7 @@ set(UI_SOURCES
     src/updater/update_checker.cpp
 )
 
-qt_add_executable(appHogrin
+qt_add_executable(appHogrin MACOSX_BUNDLE
     src/app/main.cpp
     src/common/types.h
     src/common/config.h
@@ -72,7 +72,7 @@ qt_add_executable(appHogrin
 )
 
 # ── QML Module ────────────────────────────────────────────────────────────────
-qt_add_qml_module(appHogrin MACOSX_BUNDLE
+qt_add_qml_module(appHogrin
     URI Hogrin
     VERSION 1.0
     RESOURCE_PREFIX /qt/qml
