@@ -32,7 +32,7 @@ jobs:
         with:
           version: '6.8.2'
           modules: 'qtnetworkauth qt5compat'
-          cache: true
+          cache: false
 
       - name: Build Project
         run: |
