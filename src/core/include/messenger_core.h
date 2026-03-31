@@ -59,8 +59,6 @@ public:
 
 signals:
 
-    void message_received(const QString &text, const QString &username);
-
     void peer_found(const QString &nickname,
                     const QString &host,
                     quint16 port,
@@ -73,6 +71,9 @@ signals:
     void register_completed(bool success, const QString &error);
     void login_completed(bool success, const QString &error, const QString &token, const QString &nickname);
     void verify_completed(bool success, const QString &nickname);
+
+    void message_received(const QString &sender, const QString &text);
+    void outgoing_message_sent(const QString &peer, const QString &text, const QDateTime &timestamp);
 
 private slots:
 
@@ -115,6 +116,10 @@ private:
     void try_decrypt_pending();
 
     QTimer *m_p2p_retry_timer;
+
+    void flush_pending_via_relay(const QString &peer, Crypto_Manager *crypto);
+
+    QMap<QString, QByteArray> m_pending_verification;
 
 };
 

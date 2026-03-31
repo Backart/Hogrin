@@ -95,7 +95,9 @@ void Bootstrap_Client::enqueue(const QString &message)
         if (was_empty && m_last_response_time.isValid()
             && m_last_response_time.msecsTo(QDateTime::currentDateTime()) > 6000) {
             qWarning() << "Zombie socket detected (idle > 4s). Force reconnecting...";
-            m_socket->abort();
+            QTimer::singleShot(0, this, [this](){
+                m_socket->abort();
+            });
         } else {
             flush_queue();
         }

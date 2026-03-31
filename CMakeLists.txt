@@ -8,7 +8,6 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network Sql)
-find_package(Qt6 OPTIONAL_COMPONENTS NetworkInformation)
 qt_standard_project_setup(REQUIRES 6.5)
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
@@ -24,7 +23,7 @@ if(NOT sodium_FOUND)
     FetchContent_Declare(
         libsodium
         GIT_REPOSITORY https://github.com/robinlinden/libsodium-cmake.git
-        GIT_TAG        master
+        GIT_TAG        e5b985ad0dd235d8c4307ea3a385b45e76c74c6a
     )
     FetchContent_MakeAvailable(libsodium)
     set(SODIUM_TARGET sodium)
@@ -102,7 +101,6 @@ target_link_libraries(appHogrin PRIVATE
     Qt6::Quick
     Qt6::Network
     Qt6::Sql
-    $<$<TARGET_EXISTS:Qt6::NetworkInformation>:Qt6::NetworkInformation>
     ${SODIUM_TARGET}
 )
 
@@ -117,13 +115,6 @@ target_include_directories(appHogrin PRIVATE
     src/ui/backend
 )
 
-if(TARGET Qt6::NetworkInformation)
-    target_compile_definitions(appHogrin PRIVATE HAS_QT_NETWORK_INFORMATION)
-    message(STATUS "Qt6::NetworkInformation found — network change detection enabled")
-else()
-    message(STATUS "Qt6::NetworkInformation NOT found — network change detection disabled")
-endif()
-
 # ── Android ───────────────────────────────────────────────────────────────────
 if(ANDROID)
     find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
@@ -132,7 +123,7 @@ if(ANDROID)
     FetchContent_Declare(
         android_openssl
         GIT_REPOSITORY https://github.com/KDAB/android_openssl.git
-        GIT_TAG        master
+        GIT_TAG        b71f1470962019bd89534a2919f5925f93bc5779
     )
     FetchContent_MakeAvailable(android_openssl)
 

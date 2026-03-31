@@ -38,6 +38,7 @@ public:
 private:
 
     Messenger_Core *m_core;
+    QString m_current_nickname_cache;
 
 signals:
     void message_received(QString username, QString text, QDateTime time);

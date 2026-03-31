@@ -8,6 +8,24 @@ Network_Manager::Network_Manager(QObject *parent)
     connect(m_server, &QTcpServer::newConnection, this, &Network_Manager::handle_new_connection);
 
     qDebug() << "Network_Manager initialized. (constructor)";
+
+    if (QNetworkInformation::loadDefaultBackend()) {
+        qDebug() << "Network change detection enabled!";
+
+        connect(QNetworkInformation::instance(), &QNetworkInformation::reachabilityChanged,
+                this, [this](QNetworkInformation::Reachability newReachability) {
+                    if (newReachability == QNetworkInformation::Reachability::Online) {
+                        qDebug() << "Связь появилась! Сбрасываем зомби-сокеты.";
+                        disconnect_from_host();
+                        emit network_restored();
+                    } else {
+                        qDebug() << "Сеть отвалилась! Дропаем P2P.";
+                        disconnect_from_host();
+                    }
+                });
+    } else {
+        qWarning() << "Bootstrap: network change detection not available (backend not found)";
+    }
 }
 
 bool Network_Manager::start_server(quint16 port){
@@ -104,10 +122,11 @@ void Network_Manager::handle_new_connection(){
                     if (!peer_nickname.isEmpty() &&
                         peer_pub_key.size() == crypto_kx_PUBLICKEYBYTES) {
 
-                        connection->setProperty("authenticated", true);
-                        qDebug() << "Client authenticated successfully. Peer key received.";
-                        emit incoming_peer_authenticated(peer_nickname, peer_pub_key);
-                        emit connected();
+                        qDebug() << "Handshake received from:" << peer_nickname
+                                 << "— awaiting bootstrap verification";
+                        m_pending_verification[peer_nickname] = connection;
+                        m_claimed_pubkeys[peer_nickname]      = peer_pub_key;
+                        emit incoming_peer_needs_verification(peer_nickname, peer_pub_key);
                         return;
                     }
                 }
@@ -155,3 +174,33 @@ void Network_Manager::disconnect_from_host(){
 bool Network_Manager::has_connections() const { return !m_connections.isEmpty(); }
 
 quint16 Network_Manager::listening_port() const { return m_server->serverPort(); }
+
+void Network_Manager::confirm_incoming_peer(const QString &nickname,
+                                            const QByteArray &verified_pubkey)
+{
+    auto it = m_pending_verification.find(nickname);
+    if (it == m_pending_verification.end()) return;
+
+    Tcp_Connection *conn = it.value();
+    m_pending_verification.erase(it);
+    m_claimed_pubkeys.remove(nickname);
+
+    conn->setProperty("authenticated", true);
+    qDebug() << "Peer verified via bootstrap:" << nickname;
+    emit incoming_peer_authenticated(nickname, verified_pubkey);
+    emit connected();
+}
+
+void Network_Manager::reject_incoming_peer(const QString &nickname)
+{
+    auto it = m_pending_verification.find(nickname);
+    if (it == m_pending_verification.end()) return;
+
+    Tcp_Connection *conn = it.value();
+    m_pending_verification.erase(it);
+    m_claimed_pubkeys.remove(nickname);
+
+    qWarning() << "SECURITY: dropping spoofed peer:" << nickname;
+    m_connections.removeAll(conn);
+    conn->deleteLater();
+}

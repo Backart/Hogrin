@@ -7,6 +7,7 @@
 #include <QList>
 #include <QPointer>
 #include <sodium.h>
+#include <QNetworkInformation>
 
 #include "tcp_connection.h"
 #include "../common/config.h"
@@ -42,18 +43,25 @@ signals:
     void data_received(const QByteArray &data);
 
     void p2p_failed(const QString &peer_nickname);
-    void incoming_peer_authenticated(const QString &peer_nickname, const QByteArray &peer_pub_key);
+    void incoming_peer_needs_verification(const QString &nickname,
+                                          const QByteArray &claimed_pubkey);
+    void incoming_peer_authenticated(const QString &nickname,
+                                     const QByteArray &peer_pub_key);
     void all_connections_lost();
 
+    void network_restored();
+
+public slots:
+    void confirm_incoming_peer(const QString &nickname, const QByteArray &verified_pubkey);
+    void reject_incoming_peer(const QString &nickname);
+
 private slots:
-    // Внутренние слоты
     void handle_new_connection();
     void handle_data_received(const QByteArray &data);
 
 private:
     QTcpServer *m_server;
 
-    // Список активных соеденений
     QList<Tcp_Connection*> m_connections;
 
     bool m_handshake_done = false;
@@ -61,6 +69,9 @@ private:
 
     QTimer *m_p2p_timeout_timer;
     bool m_skip_p2p = false;
+
+    QMap<QString, Tcp_Connection*> m_pending_verification; // nickname -> connection
+    QMap<QString, QByteArray>      m_claimed_pubkeys;  // nickname -> pubkey
 };
 
 #endif

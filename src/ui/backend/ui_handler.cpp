@@ -32,6 +32,7 @@ UI_Handler::UI_Handler(Messenger_Core *core,QObject *parent)
     connect(m_core, &Messenger_Core::login_completed,
             this, [this](bool success, const QString &error, const QString &token, const QString &nickname) {
                 if (success) {
+                    m_current_nickname_cache = nickname;
                     QSettings settings("Hogrin", "Hogrin");
                     settings.setValue("session/token", token);
                     settings.setValue("session/nickname", nickname);
@@ -42,6 +43,7 @@ UI_Handler::UI_Handler(Messenger_Core *core,QObject *parent)
     connect(m_core, &Messenger_Core::verify_completed,
             this, [this](bool success, const QString &nickname) {
                 if (success) {
+                    m_current_nickname_cache = nickname;
                     emit session_restored(nickname);
                 } else {
                     QSettings settings("Hogrin", "Hogrin");
@@ -49,6 +51,11 @@ UI_Handler::UI_Handler(Messenger_Core *core,QObject *parent)
                     settings.remove("session/nickname");
                     emit session_restored("");
                 }
+            });
+
+    connect(m_core, &Messenger_Core::outgoing_message_sent,
+            this, [this](const QString &peer, const QString &text, const QDateTime &timestamp){
+                emit message_received(m_current_nickname_cache, text, timestamp);
             });
 
 }
