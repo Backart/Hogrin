@@ -140,3 +140,12 @@ if(ANDROID)
         QT_ANDROID_TARGET_SDK_VERSION 34
     )
 endif()
+
+# ── Install ───────────────────────────────────────────────────────────────────
+include(GNUInstallDirs)
+
+install(TARGETS appHogrin
+    BUNDLE DESTINATION .
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
