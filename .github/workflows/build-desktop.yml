@@ -44,8 +44,22 @@ jobs:
       - name: Package macOS (DMG)
         if: matrix.os == 'macos-latest'
         run: |
-          macdeployqt build/appHogrin.app -qmldir=src/ui/qml -dmg
-          mv build/appHogrin.dmg Hogrin-macOS.dmg
+        
+          APP_PATH=$(find . -type d -name "appHogrin.app" | head -n 1)
+          
+          echo "app here: $APP_PATH"
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "Ошибка: appHogrin.app не найден!"
+            echo "--- Содержимое build: ---"
+            find build -maxdepth 2
+            echo "--- Содержимое dist: ---"
+            find dist -maxdepth 2 || echo "Папка dist не существует"
+            exit 1
+          fi
+          macdeployqt "$APP_PATH" -qmldir=src/ui/qml -dmg
+          DMG_PATH="${APP_PATH%.app}.dmg"
+          mv "$DMG_PATH" Hogrin-macOS.dmg
 
       - name: Upload Artifacts (macOS)
         if: matrix.os == 'macos-latest'
