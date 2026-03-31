@@ -31,8 +31,7 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           version: '6.8.2'
-          # Added qtsql as it's in your CMakeLists
-          modules: 'qtnetworkauth qt5compat qtnetworkinformation qtsql'
+          modules: 'qtnetworkauth qt5compat'
           cache: true
 
       - name: Build Project
