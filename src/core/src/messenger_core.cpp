@@ -352,7 +352,7 @@ void Messenger_Core::send_message(const QString &peer, const QString &text)
 
     DataPacket packet;
     packet.type      = MessageType::ChatMessage;
-    packet.timestamp = QDateTime::currentDateTime();
+    packet.timestamp = QDateTime::currentDateTimeUtc();
     packet.data      = payload;
 
     QByteArray bytes = serialize_packet(packet);
@@ -385,7 +385,7 @@ void Messenger_Core::send_message(const QString &peer, const QString &text)
                              packet.timestamp,
                              true);
 
-    emit outgoing_message_sent(peer, text, packet.timestamp);
+    emit outgoing_message_sent(peer, text, packet.timestamp.toLocalTime());
 }
 
 // ── network ──────────────────────────────────────────────────────────────────
