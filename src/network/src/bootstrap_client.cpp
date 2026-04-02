@@ -57,7 +57,7 @@ Bootstrap_Client::Bootstrap_Client(QObject *parent)
             m_socket->abort();
 
             // Assume wss:// scheme via Cloudflare
-            QString ws_url = QString("wss://%1").arg(Config::BOOTSTRAP_SERVER);
+            QString ws_url = "wss://ws.monk-hub.space";
             m_ws_socket->open(QUrl(ws_url));
         }
     });
