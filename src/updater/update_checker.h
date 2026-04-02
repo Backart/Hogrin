@@ -16,7 +16,7 @@ public:
     Q_INVOKABLE void download_and_install(const QString &url);
     Q_INVOKABLE void trigger_install();
 
-    static constexpr const char* CURRENT_VERSION = "1.0.6";
+    static constexpr const char* CURRENT_VERSION = "1.0.7";
     static constexpr const char* VERSION_URL =
         "https://monk-hub.space/public.php/dav/files/QGB6xkr3zKF6FYd/version.json";
 
