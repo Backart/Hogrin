@@ -6,6 +6,8 @@
 #include <QQueue>
 #include <QTimer>
 #include <QDateTime>
+#include <QWebSocket>
+#include <QUrl>
 #ifdef HAS_QT_NETWORK_INFORMATION
 #include <QNetworkInformation>
 #endif
@@ -58,5 +60,10 @@ private:
     void on_connected();
     void on_disconnected();
     void parse_response(const QString &response);
+
+    QWebSocket *m_ws_socket;
+    QTimer *m_fallback_timer;
+    bool m_use_ws = false;
+
 };
 #endif // BOOTSTRAP_CLIENT_H

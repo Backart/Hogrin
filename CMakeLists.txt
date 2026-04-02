@@ -7,7 +7,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network Sql)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick Network Sql WebSockets)
 qt_standard_project_setup(REQUIRES 6.5)
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
@@ -101,6 +101,7 @@ target_link_libraries(appHogrin PRIVATE
     Qt6::Quick
     Qt6::Network
     Qt6::Sql
+    Qt6::WebSockets
     ${SODIUM_TARGET}
 )
 
