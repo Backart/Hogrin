@@ -5,24 +5,25 @@
 #include <QByteArray>
 #include <QDateTime>
 
+// ── Packet types ──────────────────────────────────────────────────────────────
 enum class MessageType : quint8{
-    Registration = 1,
+    Registration = 0,
     SystemNotification,
     Handshake,
     PeerListRequest,
+    ReadReceipt,
     ChatMessage,
     SystemPing,
     MessageStatusUpdate
 };
 
-enum class MessageStatus : quint8 {
-    Sending = 0,
-    Sent,
-    Delivered,
-    Read,
-    Error
+// ── Message delivery status ───────────────────────────────────────────────────
+enum MessageStatus : quint8 {
+    MsgPending = 0,   // saved locally, not yet sent
+    MsgSent,          // delivered to peer or relay
+    MsgFailed,        // relay returned error
+    MsgRead,          // peer sent ReadReceipt
 };
-
 
 struct PeerInfo{
     QString username;
@@ -30,6 +31,7 @@ struct PeerInfo{
     quint16 port;
 };
 
+// ── Raw packet exchanged between peers ───────────────────────────────────────
 struct DataPacket{
     MessageType type;
     QByteArray data;

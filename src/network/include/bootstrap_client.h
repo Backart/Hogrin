@@ -3,11 +3,10 @@
 #include <QObject>
 #include <QDebug>
 #include <QTcpSocket>
+#include <QWebSocket>
 #include <QQueue>
 #include <QTimer>
 #include <QDateTime>
-#include <QWebSocket>
-#include <QUrl>
 #ifdef HAS_QT_NETWORK_INFORMATION
 #include <QNetworkInformation>
 #endif
@@ -29,8 +28,12 @@ public:
     void ensure_connected();
     void force_reconnect();
 
+    bool is_ws() const { return m_use_ws; }
+
 signals:
     void reconnected();
+    void transport_changed(bool is_ws);
+
     void user_not_found(const QString &nickname);
     void user_found(const QString &nickname, const QString &host,
                     quint16 port, const QByteArray &peer_public_key);
@@ -47,23 +50,22 @@ signals:
     void registered(const QString &public_ip);
 
 private:
-    QTcpSocket      *m_socket;
-    QWebSocket      *m_ws_socket;
+    QTcpSocket  *m_socket;
+    QWebSocket  *m_ws_socket;
     QQueue<QString>  m_queue;
-    QTimer          *m_reconnect_timer;
-    QTimer          *m_fallback_timer;
-    QTimer          *m_ping_timer;
-    bool             m_first_connect = true;
-    bool             m_use_ws        = false;
-    QDateTime        m_last_response_time;
-    QString          m_pending_find_nickname;
-    QString          m_pending_auth_nickname;
+    QTimer      *m_reconnect_timer;
+    QTimer      *m_fallback_timer;
+    QTimer      *m_ping_timer;
+    bool         m_first_connect = true;
+    bool         m_use_ws        = false;
+    QDateTime    m_last_response_time;
+    QString      m_pending_find_nickname;
+    QString      m_pending_auth_nickname;
 
     void enqueue(const QString &message);
     void flush_queue();
     void on_connected();
     void on_disconnected();
     void parse_response(const QString &response);
-
 };
 #endif // BOOTSTRAP_CLIENT_H
