@@ -6,12 +6,15 @@ Bootstrap_Client::Bootstrap_Client(QObject *parent)
     , m_reconnect_timer(new QTimer(this))
     , m_ws_socket(new QWebSocket(QString(), QWebSocketProtocol::VersionLatest, this))
     , m_fallback_timer(new QTimer(this))
+    , m_ping_timer(new QTimer(this))
 {
     m_reconnect_timer->setSingleShot(true);
-    m_reconnect_timer->setInterval(2000); // retry after 2s
+    m_reconnect_timer->setInterval(2000);
 
     m_fallback_timer->setSingleShot(true);
-    m_fallback_timer->setInterval(3000); // 3s timeout for TCP fallback
+    m_fallback_timer->setInterval(3000);
+
+    m_ping_timer->setInterval(45000);
 
     // ── TCP (IPv6) ────────────────────────────────────────────────────────────
 
@@ -21,7 +24,10 @@ Bootstrap_Client::Bootstrap_Client(QObject *parent)
         on_connected();
     });
 
-    connect(m_socket, &QTcpSocket::disconnected, this, &Bootstrap_Client::on_disconnected);
+    connect(m_socket, &QTcpSocket::disconnected, this, [this](){
+        if (!m_use_ws)
+            on_disconnected();
+    });
 
     connect(m_socket, &QTcpSocket::errorOccurred, this, [this](QAbstractSocket::SocketError err){
         qWarning() << "Bootstrap TCP error:" << err << m_socket->errorString();
@@ -42,24 +48,31 @@ Bootstrap_Client::Bootstrap_Client(QObject *parent)
         on_connected();
     });
 
-    connect(m_ws_socket, &QWebSocket::disconnected, this, &Bootstrap_Client::on_disconnected);
+    connect(m_ws_socket, &QWebSocket::disconnected, this, [this](){
+        if (m_use_ws)
+            on_disconnected();
+    });
 
     connect(m_ws_socket, &QWebSocket::textMessageReceived, this, [this](const QString &msg){
         m_last_response_time = QDateTime::currentDateTime();
-        parse_response(msg);
+        parse_response(msg.trimmed());
     });
 
     // ── Fallback Logic ────────────────────────────────────────────────────────
 
     connect(m_fallback_timer, &QTimer::timeout, this, [this](){
         if (m_socket->state() != QAbstractSocket::ConnectedState) {
-            qDebug() << "Bootstrap: TCP timeout. Falling back to WebSocket (IPv4)...";
+            qDebug() << "Bootstrap: TCP timeout — falling back to WebSocket (IPv4)...";
             m_socket->abort();
-
-            // Assume wss:// scheme via Cloudflare
-            QString ws_url = "wss://ws.monk-hub.space";
-            m_ws_socket->open(QUrl(ws_url));
+            m_ws_socket->open(QUrl("wss://ws.monk-hub.space"));
         }
+    });
+
+    // ── Ping (keep-alive for Cloudflare) ─────────────────────────────────────
+
+    connect(m_ping_timer, &QTimer::timeout, this, [this](){
+        if (m_use_ws && m_ws_socket->state() == QAbstractSocket::ConnectedState)
+            m_ws_socket->ping();
     });
 
 #ifdef HAS_QT_NETWORK_INFORMATION
@@ -74,7 +87,7 @@ Bootstrap_Client::Bootstrap_Client(QObject *parent)
         qDebug() << "Bootstrap: network change detection active";
     }
 #else
-    qDebug() << "Bootstrap: network change detection not available (no Qt6::NetworkInformation)";
+    qDebug() << "Bootstrap: network change detection not available";
 #endif
 
     connect(m_reconnect_timer, &QTimer::timeout, this, &Bootstrap_Client::ensure_connected);
@@ -86,17 +99,11 @@ void Bootstrap_Client::ensure_connected()
 {
     if (m_socket->state() == QAbstractSocket::ConnectedState ||
         m_socket->state() == QAbstractSocket::ConnectingState ||
-        m_ws_socket->isValid())
-    {
+        m_ws_socket->state() == QAbstractSocket::ConnectedState)
         return;
-    }
 
     qDebug() << "Bootstrap: connecting TCP to" << Config::BOOTSTRAP_SERVER << Config::BOOTSTRAP_PORT;
-
-    // Always attempt TCP first (fastest route for IPv6)
     m_socket->connectToHost(QString(Config::BOOTSTRAP_SERVER), Config::BOOTSTRAP_PORT);
-
-    // Start fallback timer. If TCP fails or hangs, it triggers WS connection
     m_fallback_timer->start();
 }
 
@@ -106,9 +113,13 @@ void Bootstrap_Client::on_connected()
     m_last_response_time = QDateTime::currentDateTime();
     m_reconnect_timer->stop();
 
-    if (!m_first_connect) {
+    if (m_use_ws)
+        m_ping_timer->start();
+    else
+        m_ping_timer->stop();
+
+    if (!m_first_connect)
         emit reconnected();
-    }
     m_first_connect = false;
 
     flush_queue();
@@ -119,6 +130,7 @@ void Bootstrap_Client::on_disconnected()
     qDebug() << "Bootstrap: disconnected — retrying in 2s";
     m_first_connect = false;
     m_use_ws = false;
+    m_ping_timer->stop();
     m_reconnect_timer->start();
 }
 
@@ -127,7 +139,9 @@ void Bootstrap_Client::enqueue(const QString &message)
     bool was_empty = m_queue.isEmpty();
     m_queue.enqueue(message);
 
-    bool is_connected = m_use_ws ? m_ws_socket->isValid() : (m_socket->state() == QAbstractSocket::ConnectedState);
+    bool is_connected = m_use_ws
+                            ? (m_ws_socket->state() == QAbstractSocket::ConnectedState)
+                            : (m_socket->state() == QAbstractSocket::ConnectedState);
 
     if (is_connected) {
         if (was_empty && m_last_response_time.isValid()
@@ -144,19 +158,18 @@ void Bootstrap_Client::enqueue(const QString &message)
 
 void Bootstrap_Client::flush_queue()
 {
-    while (!m_queue.isEmpty())
-    {
+    while (!m_queue.isEmpty()) {
         if (m_socket->state() == QAbstractSocket::ConnectedState) {
             QString msg = m_queue.dequeue();
             qDebug() << "Bootstrap send (TCP):" << msg.left(80);
             m_socket->write((msg + "\n").toUtf8());
             m_socket->flush();
-        } else if (m_ws_socket->isValid()) {
+        } else if (m_ws_socket->state() == QAbstractSocket::ConnectedState) {
             QString msg = m_queue.dequeue();
             qDebug() << "Bootstrap send (WS):" << msg.left(80);
             m_ws_socket->sendTextMessage(msg);
         } else {
-            break; // Connection lost while flushing
+            break;
         }
     }
 }
@@ -164,6 +177,7 @@ void Bootstrap_Client::flush_queue()
 void Bootstrap_Client::force_reconnect()
 {
     m_fallback_timer->stop();
+    m_ping_timer->stop();
     m_socket->abort();
     m_ws_socket->abort();
     m_use_ws = false;
@@ -233,26 +247,22 @@ void Bootstrap_Client::parse_response(const QString &response)
 
 void Bootstrap_Client::auth_register(const QString &nickname, const QString &password)
 {
-    qDebug() << "Auth register:" << nickname;
     enqueue(QString("AUTH_REGISTER:%1:%2").arg(nickname, password));
 }
 
 void Bootstrap_Client::auth_login(const QString &nickname, const QString &password)
 {
-    qDebug() << "Auth login:" << nickname;
     m_pending_auth_nickname = nickname;
     enqueue(QString("AUTH_LOGIN:%1:%2").arg(nickname, password));
 }
 
 void Bootstrap_Client::auth_verify(const QString &token)
 {
-    qDebug() << "Auth verify";
     enqueue(QString("AUTH_VERIFY:%1").arg(token));
 }
 
 void Bootstrap_Client::auth_logout(const QString &token)
 {
-    qDebug() << "Auth logout";
     enqueue(QString("AUTH_LOGOUT:%1").arg(token));
 }
 
@@ -260,7 +270,6 @@ void Bootstrap_Client::register_user(const QString &nickname,
                                      quint16 port,
                                      const QByteArray &public_key)
 {
-    qDebug() << "Register user:" << nickname;
     enqueue(QString("REGISTER:%1:%2:%3")
                 .arg(nickname)
                 .arg(port)
@@ -269,21 +278,18 @@ void Bootstrap_Client::register_user(const QString &nickname,
 
 void Bootstrap_Client::find_user(const QString &nickname)
 {
-    qDebug() << "Find user:" << nickname;
     m_pending_find_nickname = nickname;
     enqueue(QString("FIND:%1").arg(nickname));
 }
 
 void Bootstrap_Client::unregister_user(const QString &nickname)
 {
-    qDebug() << "Unregister user:" << nickname;
     enqueue(QString("UNREGISTER:%1").arg(nickname));
 }
 
 bool Bootstrap_Client::store_message(const QString &nickname,
                                      const QByteArray &encrypted_blob)
 {
-    qDebug() << "Store relay message for:" << nickname;
     enqueue(QString("STORE:%1:%2")
                 .arg(nickname)
                 .arg(QString::fromUtf8(encrypted_blob.toHex())));

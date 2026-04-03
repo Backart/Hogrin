@@ -48,9 +48,13 @@ signals:
 
 private:
     QTcpSocket      *m_socket;
+    QWebSocket      *m_ws_socket;
     QQueue<QString>  m_queue;
     QTimer          *m_reconnect_timer;
+    QTimer          *m_fallback_timer;
+    QTimer          *m_ping_timer;
     bool             m_first_connect = true;
+    bool             m_use_ws        = false;
     QDateTime        m_last_response_time;
     QString          m_pending_find_nickname;
     QString          m_pending_auth_nickname;
@@ -60,10 +64,6 @@ private:
     void on_connected();
     void on_disconnected();
     void parse_response(const QString &response);
-
-    QWebSocket *m_ws_socket;
-    QTimer *m_fallback_timer;
-    bool m_use_ws = false;
 
 };
 #endif // BOOTSTRAP_CLIENT_H
