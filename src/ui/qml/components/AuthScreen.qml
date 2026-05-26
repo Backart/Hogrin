@@ -49,6 +49,44 @@ Rectangle {
         opacity: 0.15
     }
 
+    // ── Theme Switcher ──
+        Rectangle {
+            anchors {
+                top: parent.top
+                right: parent.right
+                margins: 20
+            }
+            width: 38
+            height: 38
+            radius: 19
+            color: theme.bgSide
+            border.color: theme.border
+            border.width: 1
+
+            Behavior on color { ColorAnimation { duration: 150 } }
+
+            Text {
+                anchors.centerIn: parent
+                // Використовуємо твою змінну isDarkMode
+                text: theme.isDarkMode ? "☀️" : "🌙"
+                font.pixelSize: 18
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+
+                onEntered: parent.border.color = theme.accent
+                onExited: parent.border.color = theme.border
+
+                onClicked: {
+                    // Перемикаємо тему!
+                    theme.isDarkMode = !theme.isDarkMode
+                }
+            }
+        }
+
     ColumnLayout {
         anchors.centerIn: parent
         width: Math.min(360, parent.width - 48)
