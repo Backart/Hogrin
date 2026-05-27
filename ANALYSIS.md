@@ -73,23 +73,3 @@ After an extensive review of the provided code, several security vulnerabilities
   QSqlDatabase::removeDatabase(m_connection_name);
   ```
 
----
-
-### 5. API/Naming Discrepancy: `DB_Manager::validateUser` Parameter Naming
-* **Location:** `DB_Manager::validateUser` in `src/db/src/db_manager.cpp`
-* **Severity:** **Low**
-* **Description:** 
-  The method signature defines the second argument as `passwordHash`:
-  ```cpp
-  bool DB_Manager::validateUser(const QString &nickname, const QString &passwordHash)
-  ```
-  However, inside the implementation, this parameter is directly passed to `crypto_pwhash_str_verify` as if it were the **cleartext password**:
-  ```cpp
-  return crypto_pwhash_str_verify(
-             stored_hash.toUtf8().constData(),
-             passwordHash.toUtf8().constData(),
-             passwordHash.toUtf8().size()) == 0;
-  ```
-  If the bootstrap server sends a pre-hashed password over the network, this check will fail (since it tries to verify a hash of a hash). If it is indeed a cleartext password, the parameter name is extremely misleading to developers and can easily lead to integration bugs.
-* **Remedy:** 
-  Rename the argument to `password` or `plainPassword` to ensure clarity and prevent future developers from passing pre-hashed data to this verification routine.
