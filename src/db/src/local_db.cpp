@@ -5,6 +5,7 @@ Local_DB::Local_DB(QObject *parent) : QObject(parent) {}
 Local_DB::~Local_DB()
 {
     if (m_db.isOpen()) m_db.close();
+    m_db = QSqlDatabase();
     if (!m_connection_name.isEmpty()) QSqlDatabase::removeDatabase(m_connection_name);
 }
 
@@ -12,6 +13,7 @@ bool Local_DB::init(const QString &nickname)
 {
     if (m_db.isOpen()) {
         m_db.close();
+        m_db = QSqlDatabase();
         QSqlDatabase::removeDatabase(m_connection_name);
     }
 
