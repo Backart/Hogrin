@@ -59,7 +59,7 @@ private:
     bool         m_first_connect = true;
     bool         m_use_ws        = false;
     QDateTime    m_last_response_time;
-    QString      m_pending_find_nickname;
+    QQueue<QString> m_pending_find_nicknames;
     QString      m_pending_auth_nickname;
 
     void enqueue(const QString &message);

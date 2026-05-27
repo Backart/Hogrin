@@ -141,6 +141,7 @@ void Bootstrap_Client::on_disconnected()
     m_use_ws = false;
     m_ping_timer->stop();
     m_reconnect_timer->start();
+    m_pending_find_nicknames.clear();
 }
 
 void Bootstrap_Client::enqueue(const QString &message)
@@ -212,15 +213,18 @@ void Bootstrap_Client::parse_response(const QString &response)
     }
     else if (response.startsWith("FOUND:")) {
         QStringList parts = response.mid(6).split("|");
-        if (parts.size() == 3) {
-            emit user_found(m_pending_find_nickname,
+        if (parts.size() == 3 && !m_pending_find_nicknames.isEmpty()) {
+            QString nickname = m_pending_find_nicknames.dequeue();
+            emit user_found(nickname,
                             parts[0],
                             parts[1].toUShort(),
                             QByteArray::fromHex(parts[2].toUtf8()));
         }
     }
     else if (response == "NOT_FOUND") {
-        emit user_not_found(m_pending_find_nickname);
+        if (!m_pending_find_nicknames.isEmpty()) {
+            emit user_not_found(m_pending_find_nicknames.dequeue());
+        }
     }
     else if (response == "OK") {
         emit store_confirmed();
@@ -270,7 +274,7 @@ void Bootstrap_Client::register_user(const QString &nickname,
 
 void Bootstrap_Client::find_user(const QString &nickname)
 {
-    m_pending_find_nickname = nickname;
+    m_pending_find_nicknames.enqueue(nickname);
     enqueue(QString("FIND:%1").arg(nickname));
 }
 

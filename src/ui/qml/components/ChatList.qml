@@ -229,8 +229,6 @@ Rectangle {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: theme.border }
-
                     // Toast
                     Rectangle {
                         id: searchToast

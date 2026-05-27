@@ -50,7 +50,12 @@ Item {
     // ── Невидимая зона для Hover и тапов (Вынесена из Row!) ────────────────
     MouseArea {
         id: rowMouseArea
-        anchors.fill: msgRow
+        anchors {
+            left: parent.left
+            right: parent.right
+            top: showDateSep ? dateSep.bottom : parent.top
+            bottom: parent.bottom
+        }
         hoverEnabled: true
         onClicked: root.showReplyMobile = !root.showReplyMobile
     }
