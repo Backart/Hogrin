@@ -11,6 +11,13 @@ Crypto_Manager::Crypto_Manager()
     qDebug() << "Crypto_Manager: keypair generated";
 }
 
+Crypto_Manager::~Crypto_Manager()
+{
+    sodium_memzero(m_secret_key, sizeof(m_secret_key));
+    sodium_memzero(m_rx, sizeof(m_rx));
+    sodium_memzero(m_tx, sizeof(m_tx));
+}
+
 QByteArray Crypto_Manager::public_key() const
 {
     return QByteArray(reinterpret_cast<const char*>(m_public_key),

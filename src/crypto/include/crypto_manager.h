@@ -11,6 +11,7 @@ class Crypto_Manager
 {
 public:
     Crypto_Manager();
+    ~Crypto_Manager();
 
     QByteArray public_key() const;
     QByteArray secret_key() const;
