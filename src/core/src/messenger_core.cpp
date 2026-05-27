@@ -129,6 +129,13 @@ Messenger_Core::Messenger_Core(QObject *parent)
                         qWarning() << "Undecryptable relay message from:" << sender_nick;
                     }
                 }
+
+                if (!messages.isEmpty()) {
+                    m_poll_timer->stop();
+                    QTimer::singleShot(0, this, &Messenger_Core::poll_relay_messages);
+                } else {
+                    m_poll_timer->start(Config::RELAY_POLL_INTERVAL_MS);
+                }
             });
 
     // ── Poll timer ────────────────────────────────────────────────────────────
