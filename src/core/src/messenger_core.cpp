@@ -106,10 +106,18 @@ Messenger_Core::Messenger_Core(QObject *parent)
                     QByteArray peer_pubkey = QByteArray::fromHex(blob.mid(first + 1, second - first - 1));
                     QByteArray encrypted   = blob.mid(second + 1);
 
+                    QByteArray trusted_pubkey = m_local_db->get_contact_key(sender_nick);
+                    if (trusted_pubkey.isEmpty() || trusted_pubkey != peer_pubkey) {
+                        qWarning() << "SECURITY: Mismatched or missing public key for relay message from:" << sender_nick;
+                        m_undecryptable_messages.append(sender_nick.toUtf8() + "|" + encrypted);
+                        m_bootstrap->find_user(sender_nick);
+                        continue;
+                    }
+
                     Crypto_Manager *crypto = crypto_for(sender_nick);
                     if (!crypto->is_ready()) {
                         crypto->set_identity(*m_identity_crypto);
-                        crypto->compute_shared_secret(peer_pubkey);
+                        crypto->compute_shared_secret(trusted_pubkey);
                     }
 
                     QByteArray decrypted = crypto->decrypt(encrypted);
