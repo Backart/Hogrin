@@ -76,7 +76,7 @@ bool DB_Manager::userExists(const QString &nickname)
     return query.next();
 }
 
-bool DB_Manager::validateUser(const QString &nickname, const QString &passwordHash)
+bool DB_Manager::validateUser(const QString &nickname, const QString &password)
 {
     QSqlQuery query(m_db);
     query.prepare("SELECT password_hash FROM users "
@@ -90,8 +90,8 @@ bool DB_Manager::validateUser(const QString &nickname, const QString &passwordHa
 
     return crypto_pwhash_str_verify(
                stored_hash.toUtf8().constData(),
-               passwordHash.toUtf8().constData(),
-               passwordHash.toUtf8().size()) == 0;
+               password.toUtf8().constData(),
+               password.toUtf8().size()) == 0;
 }
 
 bool DB_Manager::updateLastSeen(const QString &nickname)
